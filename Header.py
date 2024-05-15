@@ -14,7 +14,7 @@ class RDTHeader():
         self.RWND = RWND                        # Notification window size 4 bytes
         self.Reserved = 0                       # Reserved field for any attribte you need.
         
-        self.Source_address = [127,0,0,1,12334] # Souce ip and port
+        self.Source_address = [127,0,0,1,12334] # Souce ip and port: each segment of IP takes 1 byte, the port takes 2 bytes
         self.Target_address = [127,0,0,1,12345] # Target ip and port
         
         
