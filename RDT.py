@@ -1,18 +1,24 @@
 import socket
+from Header import RDTHeader
+from threading import Thread
+
+# References:
+# https://realpython.com/python-sockets/
+# https://github.com/ethay012/TCP-over-UDP/blob/master/TCP_over_UDP.py
 
 class RDTSocket():
     def __init__(self) -> None:
         """
         You shold define necessary attributes in this function to initialize the RDTSocket
         """
-        #############################################################################
-        # TODO: NECESSARY ATTRIBUTES HERE                                           #
-        #############################################################################
-        
-        #############################################################################
-        # TODO: YOUR CODE HERE                                                      #
-        #############################################################################
-        pass
+        self.status = 1 # Socket open or close
+        self.socket = None
+        self.address = None
+        self.port = None
+        self.conn = {}
+        self.conn_queue = []
+        self.conn_lock = threading.Lock()
+        self.queue_lock = threading.Lock()
     
     def bind(self, address: (str, int)): # type: ignore
         """
@@ -25,12 +31,12 @@ class RDTSocket():
         params: 
             address:    Target IP address and its port
         """
-        #############################################################################
-        # TODO: YOUR CODE HERE                                                      #
-        #############################################################################
-        raise NotImplementedError()
-    
-    def accept(self) -> RDTSocket: # type: ignore
+        self.address = address[0]
+        self.port = address[1]
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.socket.bind((self.address, self.port))
+
+    def accept(self): # type: ignore
         """
         When using this SOCKET to create an RDT SERVER, it should accept the connection
         from a CLIENT. After that, an RDT connection should be established.
@@ -39,10 +45,16 @@ class RDTSocket():
         be isolated from each other, requiring you to multiplex the data received at 
         the underlying UDP.
         """
-        #############################################################################
-        # TODO: YOUR CODE HERE                                                      #
-        #############################################################################
-        raise NotImplementedError()
+        try:
+            while True:
+                data, client = self.socket.recvfrom(1024)
+                print(f"Received: {data!r} from {client}")
+                if data:
+                    print(f"Send: {data!r} to {client}")
+                    self.socket.sendto(data, client)
+        except Exception as error:
+            print(f"Error: {error}")
+            self.socket.close()
     
     def connect(self, address: (str, int)): # type: ignore
         """
@@ -52,10 +64,10 @@ class RDTSocket():
         params:
             address:    Target IP address and its port
         """
-        #############################################################################
-        # TODO: YOUR CODE HERE                                                      #
-        #############################################################################
-        raise NotImplementedError()
+        message = b"Hello, I am a client"
+        self.socket.sendto(message, address)
+        data, server = self.socket.recvfrom(1024)
+        print(f"Received: {data!r}")
     
     def send(self, data=None, tcpheader=None):
         """
