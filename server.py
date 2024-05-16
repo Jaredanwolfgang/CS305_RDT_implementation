@@ -2,4 +2,13 @@
 import RDT
 server = RDT.RDTSocket()
 server.bind(('127.0.0.1', 2345))
-server.accept()
+server.listen(5)
+while True:
+    try:
+        addr = server.accept()
+        if addr:
+            print(f"Server connected to {addr}")
+    except KeyboardInterrupt:
+        break
+    except:
+        continue

@@ -6,9 +6,9 @@ Each socket is binded to an address and a port, while connecting to a server, th
 After the server gets the address and the port of the client, it will maintain a FSM with the according client to form a "connection".
 
 ## Connection
-- [ ] 3-way Handshake
-- [ ] 4-way Handshake
-- [ ] Multithreading
+- [x] 3-way Handshake
+- [x] 4-way Handshake
+- [x] Multithreading
 
 ## Packet Verfiication
 - [x] Checksum Generate

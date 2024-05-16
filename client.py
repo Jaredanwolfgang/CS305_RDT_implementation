@@ -2,4 +2,5 @@
 import RDT
 client = RDT.RDTSocket()
 client.bind(('127.0.0.1', 2346))
+client.listen(5)
 client.connect(('127.0.0.1', 2345))

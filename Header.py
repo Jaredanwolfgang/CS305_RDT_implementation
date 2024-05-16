@@ -22,23 +22,28 @@ class RDTHeader():
         # Join all bytes data together 
         # (In the order of SYN, FIN, ACK, SEQ_num, 
         # ACK_num, LEN, RWND, CHECKSUM, Reserved, PAYLOAD.).
-        sum_data = self.SYN.to_bytes(1, 'big') + self.FIN.to_bytes(1, 'big') + self.ACK.to_bytes(1, 'big') + \
-                self.SEQ_num.to_bytes(4, 'big') + self.ACK_num.to_bytes(4, 'big') + self.LEN.to_bytes(4, 'big') + \
-                self.RWND.to_bytes(4, 'big') + self.CHECKSUM.to_bytes(2, 'big') + self.Reserved.to_bytes(8, 'big') + \
-                self.PAYLOAD.encode() if isinstance(self.PAYLOAD, str) else "".encode()
+        if isinstance(self.PAYLOAD, str):
+            sum_data = self.SYN.to_bytes(1, 'big') + self.FIN.to_bytes(1, 'big') + self.ACK.to_bytes(1, 'big') + \
+                    self.SEQ_num.to_bytes(4, 'big') + self.ACK_num.to_bytes(4, 'big') + self.LEN.to_bytes(4, 'big') + \
+                    self.RWND.to_bytes(4, 'big') + self.CHECKSUM.to_bytes(2, 'big') + self.Reserved.to_bytes(8, 'big') + \
+                    self.PAYLOAD.encode()
+        else:
+            sum_data = self.SYN.to_bytes(1, 'big') + self.FIN.to_bytes(1, 'big') + self.ACK.to_bytes(1, 'big') + \
+                    self.SEQ_num.to_bytes(4, 'big') + self.ACK_num.to_bytes(4, 'big') + self.LEN.to_bytes(4, 'big') + \
+                    self.RWND.to_bytes(4, 'big') + self.CHECKSUM.to_bytes(2, 'big') + self.Reserved.to_bytes(8, 'big')
         
         # Step 2:
         # Didvide the result into 2-byte segments, 
         # with each 2-byte segment forming a 16-bit value. 
         # If there is a single byte of data at the end, 
         # add an extra byte of 0 to form a 2-byte segment.
-        sum_data = [sum_data[i:i+2] for i in range(0, len(sum_data), 2)]
-        if len(sum_data[-1]) == 1:
-            sum_data[-1] += b'\x00'
+        data_seg = [sum_data[i:i+2] for i in range(0, len(sum_data), 2)]
+        if len(data_seg[-1]) == 1:
+            data_seg[-1] += b'\x00'
         
         # Step 3:
         # Sum all the 16-bit values to obtain a 32-bit value.
-        sum_data = [int.from_bytes(i, 'big') for i in sum_data]
+        sum_data = [int.from_bytes(i, 'big') for i in data_seg]
         sum_data = sum(sum_data)
         
         # Step 4:
@@ -80,7 +85,7 @@ class RDTHeader():
         
         SYN = self.SYN.to_bytes(1, 'big')
         FIN = self.FIN.to_bytes(1, 'big')
-        ACK = self.FIN.to_bytes(1, 'big')
+        ACK = self.ACK.to_bytes(1, 'big')
         SEQ_num = self.SEQ_num.to_bytes(4, 'big')
         ACK_num = self.ACK_num.to_bytes(4, 'big')
         LEN = self.LEN.to_bytes(4, 'big')
@@ -114,16 +119,15 @@ class RDTHeader():
         self.SEQ_num = int.from_bytes(data[16:20], 'big')
         self.ACK_num = int.from_bytes(data[20:24], 'big')
         self.LEN = int.from_bytes(data[24:28], 'big')
-        self.CHECKSUM = int.from_bytes(data[28:30], 'big')
-        self.RWND = int.from_bytes(data[30:34], 'big')
+        self.RWND = int.from_bytes(data[28:32], 'big')
+        self.CHECKSUM = int.from_bytes(data[32:34], 'big')
         self.Reserved = int.from_bytes(data[34:42], 'big')
         
         self.PAYLOAD = data[42:].decode()
-
         return self
 
     def __str__(self) -> str:
-        return f"SYN: {self.SYN}\n FIN: {self.FIN}\n ACK: {self.ACK}\n SEQ_num: {self.SEQ_num}\n ACK_num: {self.ACK_num}\n LEN: {self.LEN}\n CHECKSUM: {self.CHECKSUM}\n RWND: {self.RWND}\n PAYLOAD: {self.PAYLOAD}\n Source_address: {self.Source_address}\n Target_address: {self.Target_address}"
+        return f"SYN: {self.SYN} FIN: {self.FIN} ACK: {self.ACK}\n SEQ_num: {self.SEQ_num} ACK_num: {self.ACK_num} LEN: {self.LEN}\n CHECKSUM: {self.CHECKSUM} RWND: {self.RWND}\n PAYLOAD: {self.PAYLOAD}\n Source_address: {self.Source_address}\n Target_address: {self.Target_address}"
     
     def __repr__(self) -> str:
         return self.__str__()
