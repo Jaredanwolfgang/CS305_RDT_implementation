@@ -17,6 +17,8 @@ SEQ_LEFT = 0
 SEQ_RIGHT = 1000
 
 class RDTSocket():
+    sender_state = ['Wait for call 0 from above', 'Wait for call 1 from above', 'Wait for ACK 0', 'Wait for ACK 1']
+    
     def __init__(self) -> None:
         """
         You shold define necessary attributes in this function to initialize the RDTSocket
@@ -88,10 +90,13 @@ class RDTSocket():
             try:
                 if self.packets["SYN"]:
                     address, packet = self.packets["SYN"].popitem()
-                    with self.queue_lock:
-                        if len(self.conn_queue) < max_connections:
-                            self.conn_queue.append((packet, address))
-                            print(f"Adding connection from {address} to connection queue.")
+                    if address not in self.conn.keys():
+                        with self.queue_lock:
+                            if len(self.conn_queue) < max_connections:
+                                self.conn_queue.append((packet, address))
+                                print(f"Adding connection from {address} to connection queue.")
+                    else:
+                        print(f"Connection with {address} already established.")
             except Exception as error:
                 print(f"[Server] Problem when adding SYN request to connection queue: {error}")
                 self.status = 0
@@ -109,7 +114,7 @@ class RDTSocket():
             print(f"[Server] RDT Connection Establishment Error: {error}")
             self.socket.close()
 
-    def accept(self): # type: ignore
+    def accept(self): 
         """
         When using this SOCKET to create an RDT SERVER, it should accept the connection
         from a CLIENT. After that, an RDT connection should be established.
@@ -162,7 +167,7 @@ class RDTSocket():
                     
                     # Receive ACK response
                     self.conn[address] = ack_answer
-                    print(f"[Server] Connection with {address} is created!")
+                    print(f"[Server] Connection with {address} is created! There are currently {len(self.conn)} connections.")
                     return address
         except Exception as error:
             print(f"[Server] Accept() function finds error: {error.with_traceback}")
@@ -221,7 +226,10 @@ class RDTSocket():
         except Exception as error:
             print(f"[Client] RDT Connection Establishment Error: {error.with_traceback()}")
             self.socket.close()
-    
+            
+    def rdt_send(self, address, data, SEQ_num, ACK_num):
+        pass
+        
     def send(self, data=None, tcpheader=None):
         """
         RDT can use this function to send specified data to a target that has already 
