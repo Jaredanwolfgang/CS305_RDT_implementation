@@ -12,7 +12,9 @@ class RDTHeader():
         self.PAYLOAD = PAYLOAD                  # Data LEN bytes
         # self.CWND = CWND                      # Congestion window size 4 bytes
         self.RWND = RWND                        # Notification window size 4 bytes
-        self.Reserved = 0                       # Reserved field for any attribte you need.
+        self.ID = 0                             # 2 bytes, Identification Field for any file (Having the same ID means the same file)
+        self.SEG_SERIAL = 0                     # 2 bytes, When conducting data segment transmission, the serial number of the segment
+        self.Reserved = 0                       # 4 bytes, Reserved field
         
         self.Source_address = [127,0,0,1,12334] # Souce ip and port: each segment of IP takes 1 byte, the port takes 2 bytes
         self.Target_address = [127,0,0,1,12345] # Target ip and port
@@ -25,12 +27,14 @@ class RDTHeader():
         if isinstance(self.PAYLOAD, str):
             sum_data = self.SYN.to_bytes(1, 'big') + self.FIN.to_bytes(1, 'big') + self.ACK.to_bytes(1, 'big') + \
                     self.SEQ_num.to_bytes(4, 'big') + self.ACK_num.to_bytes(4, 'big') + self.LEN.to_bytes(4, 'big') + \
-                    self.RWND.to_bytes(4, 'big') + self.CHECKSUM.to_bytes(2, 'big') + self.Reserved.to_bytes(8, 'big') + \
+                    self.RWND.to_bytes(4, 'big') + self.CHECKSUM.to_bytes(2, 'big') + self.ID.to_bytes(2, 'big') + \
+                    self.SEG_SERIAL.to_bytes(2, 'big') + self.Reserved.to_bytes(4, 'big') + \
                     self.PAYLOAD.encode()
         else:
             sum_data = self.SYN.to_bytes(1, 'big') + self.FIN.to_bytes(1, 'big') + self.ACK.to_bytes(1, 'big') + \
                     self.SEQ_num.to_bytes(4, 'big') + self.ACK_num.to_bytes(4, 'big') + self.LEN.to_bytes(4, 'big') + \
-                    self.RWND.to_bytes(4, 'big') + self.CHECKSUM.to_bytes(2, 'big') + self.Reserved.to_bytes(8, 'big')
+                    self.RWND.to_bytes(4, 'big') + self.CHECKSUM.to_bytes(2, 'big') + self.ID.to_bytes(2, 'big') + \
+                    self.SEG_SERIAL.to_bytes(2, 'big') + self.Reserved.to_bytes(4, 'big')
         
         # Step 2:
         # Didvide the result into 2-byte segments, 
@@ -95,9 +99,11 @@ class RDTHeader():
         CHECKSUM = self.CHECKSUM.to_bytes(2, 'big')
         
         PAYLOAD = self.PAYLOAD.encode() if isinstance(self.PAYLOAD, str) else "".encode()
-        Reserved = self.Reserved.to_bytes(8, 'big')
+        ID = self.ID.to_bytes(2, 'big')
+        SEG_SERAIL = self.SEG_SERIAL.to_bytes(2, 'big')
+        Reserved = self.Reserved.to_bytes(4, 'big')
         
-        return b''.join([test_case, Source_address, Target_address, SYN, FIN, ACK, SEQ_num, ACK_num, LEN, RWND, CHECKSUM, Reserved, PAYLOAD])
+        return b''.join([test_case, Source_address, Target_address, SYN, FIN, ACK, SEQ_num, ACK_num, LEN, RWND, CHECKSUM, ID, SEG_SERAIL, Reserved, PAYLOAD])
 
     def from_bytes(self, data):
         self.test_case = data[0]
@@ -121,8 +127,9 @@ class RDTHeader():
         self.LEN = int.from_bytes(data[24:28], 'big')
         self.RWND = int.from_bytes(data[28:32], 'big')
         self.CHECKSUM = int.from_bytes(data[32:34], 'big')
-        self.Reserved = int.from_bytes(data[34:42], 'big')
-        
+        self.ID = int.from_bytes(data[34:36], 'big')
+        self.SEG_SERIAL = int.from_bytes(data[36:38], 'big')
+        self.Reserved = int.from_bytes(data[38:42], 'big')
         self.PAYLOAD = data[42:].decode()
         return self
 
