@@ -32,7 +32,7 @@ class RDTSocket():
         self.conn_lock = threading.Lock()
         self.queue_lock = threading.Lock()
         self.packets_lock = threading.Lock()
-        
+
         # Received Packets as Sever
         self.packets = {"SYN": {}, "ACK": {}, "SYN_ACK": {}, "FIN_ACK": {}, "DATA": {}}
         # Established Connection as Client
@@ -85,6 +85,7 @@ class RDTSocket():
                         self.packets["ACK"][address] = packet
                         print(f"[{(self.address, self.port)}] Receiving ACK data {packet} from {address}")
                     elif packet.PAYLOAD:
+                        print (f"get {packet} end... \n")
                         if(self.packets["DATA"].get(address) is None):
                             print(f"packets in {address}")
                             self.packets["DATA"][address] = [packet]
@@ -171,11 +172,10 @@ class RDTSocket():
                     
                     ack_answer = None
                     while ack_answer is None:
-                        time.sleep(0.25)
                         try:
                             if address in self.packets["ACK"].keys():
                                 ack_answer = self.packets["ACK"].pop(address)
-                        except socket.timeout:
+                        except self.socket.timeout:
                             self.socket.sendto(message_SYN_ACK.to_bytes(), address)
                     print(f"[Server] Received ACK answer.\n {ack_answer}")
                     
@@ -221,11 +221,10 @@ class RDTSocket():
             # Receive SYN_ACK
             syn_ack_answer = None
             while syn_ack_answer is None:
-                time.sleep(0.25)
                 try:
                     if address in self.packets["SYN_ACK"].keys():
                         syn_ack_answer = self.packets["SYN_ACK"].pop(address)
-                except socket.timeout:
+                except self.socket.timeout:
                     self.socket.sendto(message_SYN.to_bytes(), address)
             print(f"[Client] Message SYN_ACK received.\n {syn_ack_answer}")
             
@@ -284,7 +283,6 @@ class RDTSocket():
         SEQ_num = 0 # Byte Stream "number" of the first byte in the data
         ACK_num = 0 # Byte Stream "number" of the next byte expected by the sender
         while True and address in self.conn.keys():
-            time.sleep(0.1)
             with self.conn_lock:
                 if self.conn[address] == "Wait for call 0 from above":
                     self.conn[address] = "Wait for ACK 0"
@@ -302,7 +300,7 @@ class RDTSocket():
                     # 2. The data is sent successfully, but timeout.
                     # 3. The data is sent successfully, but the rcvpkt is corrupted.
                     with self.packets_lock:
-                        if address in self.packets["DATA"].keys():
+                        if address in self.packets["DATA"].keys() and len(self.packets["DATA"][address]) != 0:
                             rcvpkt = self.packets["DATA"][address].pop()
                             if self.corrupt(rcvpkt) or rcvpkt.ACK_num != 0:
                                 print("[Sender] Corrupted ACK packet.")
@@ -322,7 +320,7 @@ class RDTSocket():
                     # 2. The data is sent successfully, but timeout.
                     # 3. The data is sent successfully, but the rcvpkt is corrupted.
                     with self.packets_lock:
-                        if address in self.packets["DATA"].keys():
+                        if address in self.packets["DATA"].keys() and len(self.packets["DATA"][address]) != 0:
                             rcvpkt = self.packets["DATA"][address].pop()
                             if self.corrupt(rcvpkt) or rcvpkt.ACK_num != 1:
                                 print("[Sender] Corrupted ACK packet.")
@@ -386,7 +384,7 @@ class RDTSocket():
                                 SEQ_num = rcvpkt.ACK_num
                                 ACK_num = 1
                                 self.conn[address] = "Wait for 0 from below"
-                                data = rcvpkt.PAYLAOD
+                                data = rcvpkt.PAYLOAD
                                 timer = self.udt_send(address, data, SEQ_num, ACK_num)
                                 data_received.append(rcvpkt.PAYLOAD.encode())
         print("[Receiver] Data received. Ready to close connection.")
