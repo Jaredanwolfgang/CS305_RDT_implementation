@@ -298,14 +298,13 @@ class RDTSocket():
                     # 2. The data is sent successfully, but timeout.
                     # 3. The data is sent successfully, but the rcvpkt is corrupted.
                     with self.packets_lock:
-                        # print ("DATA: ", self.packets["DATA"].keys())
                         if address in self.packets["DATA"].keys():
                             rcvpkt = self.packets["DATA"][address].pop()
-                            if self.corrupt(rcvpkt) or rcvpkt.ACK_num != 1:
-                                print("Corrupted ACK packet.")
+                            if self.corrupt(rcvpkt) or rcvpkt.ACK_num != 0:
+                                print("[Sender] Corrupted ACK packet.")
                                 timer = self.udt_send(address, data_seg[0], SEQ_num, ACK_num)
                             elif rcvpkt.ACK_num == 0:
-                                print("Received ACK packet.")
+                                print("[Sender] Received ACK packet.")
                                 SEQ_num = 1
                                 ACK_num = rcvpkt.SEQ_num
                                 self.conn[address] = "Wait for call 1 from above"
@@ -322,10 +321,10 @@ class RDTSocket():
                         if address in self.packets["DATA"].keys():
                             rcvpkt = self.packets["DATA"][address].pop()
                             if self.corrupt(rcvpkt) or rcvpkt.ACK_num != 1:
-                                print("Corrupted ACK packet.")
+                                print("[Sender] Corrupted ACK packet.")
                                 timer = self.udt_send(address, data_seg[0], SEQ_num, ACK_num)
                             elif rcvpkt.ACK_num == 1:
-                                print("Received ACK packet.")
+                                print("[Sender] Received ACK packet.")
                                 SEQ_num = 0
                                 ACK_num = rcvpkt.SEQ_num
                                 self.conn[address] = "Wait for call 0 from above"
@@ -333,7 +332,7 @@ class RDTSocket():
                         elif time.time() - timer > self.timeout:
                             print("Timeout.")
                             timer = self.udt_send(address, data_seg[0], SEQ_num, ACK_num)
-        print("Data sent. Ready to close connection.")
+        print("[Sender] Data sent. Ready to close connection.")
         self.close_conn_active(address, SEQ_num, ACK_num)
         
     def recv(self, address):
@@ -356,7 +355,7 @@ class RDTSocket():
                     with self.packets_lock:
                         if address in self.packets["FIN_ACK"].keys():
                             break
-                        if address in self.packets["DATA"].keys():
+                        if address in self.packets["DATA"].keys() and len(self.packets["DATA"][address]) != 0:
                             rcvpkt = self.packets["DATA"][address].pop()
                             if self.corrupt(rcvpkt) or rcvpkt.SEQ_num != 0:
                                 print("Corrupted DATA packet.")
@@ -368,13 +367,15 @@ class RDTSocket():
                                 data = rcvpkt.PAYLOAD
                                 timer = self.udt_send(address, data, SEQ_num, ACK_num)
                                 data_received.append(rcvpkt)
-                    print("debug- O5")
                 elif(self.conn[address] == "Wait for 1 from below"):
                     print ("[Receiver] Wait for 1 from below")
                     with self.packets_lock:
+                        print("[Receiver] Debugs O1")
                         if address in self.packets["FIN_ACK"].keys():
+                            print("[Receiver] Debugs O2")
                             break
-                        if address in self.packets["DATA"].keys():
+                        if address in self.packets["DATA"].keys() and len(self.packets["DATA"][address]) != 0:
+                            print("[Receiver] Debugs O3")
                             rcvpkt = self.packets["DATA"][address].pop()
                             if(self.corrupt(rcvpkt) or rcvpkt.SEQ_num != 1):
                                 print("Corrupted DATA packet.")
@@ -386,8 +387,9 @@ class RDTSocket():
                                 data = rcvpkt.PAYLAOD.encode() if isinstance(rcvpkt.PAYLOAD, str) else "".encode()
                                 timer = self.udt_send(address, data, SEQ_num, ACK_num)
                                 data_received.append(rcvpkt)
-        print(f"here, since keys = {self.conn.keys()}")
-        self.close_conn(address, SEQ_num, ACK_num)
+                        print("[Receiver] Debugs O4")
+        print("[Receiver] Data received. Ready to close connection.")
+        self.close_conn_passive(address, SEQ_num, ACK_num)
         return data_received
     
     def close_conn_active(self, address, SEQ_num, ACK_num):
@@ -410,6 +412,7 @@ class RDTSocket():
                 # Send FIN ACK
                 message_FIN_ACK = send_FIN_ACK(address, SEQ_num, ACK_num)
                 self.socket.sendto(message_FIN_ACK.to_bytes(), address)
+                print(f"[Sender] Message FIN_ACK sent.\n {message_FIN_ACK}")
                 
                 # Receive ACK
                 ack_answer = None
@@ -421,7 +424,7 @@ class RDTSocket():
                                 ack_answer = self.packets["ACK"][address]
                     except socket.timeout:
                         self.socket.sendto(message_FIN_ACK.to_bytes(), address)
-                print(f"[Server] Received ACK answer.\n {ack_answer}")
+                print(f"[Sender] Received ACK answer.\n {ack_answer}")
                 
                 # Receive FIN ACK
                 fin_ack_answer = None
@@ -430,21 +433,22 @@ class RDTSocket():
                     try:
                         with self.packets_lock:   
                             if address in self.packets["FIN_ACK"].keys():
-                                in_ack_answer = self.packets["FIN_ACK"][address]
+                                fin_ack_answer = self.packets["FIN_ACK"][address]
                     except socket.timeout:
                         self.socket.sendto(message_FIN_ACK.to_bytes(), address)
-                print(f"[Server] Received FIN_ACK answer.\n {fin_ack_answer}")
+                print(f"[Sender] Received FIN_ACK answer.\n {fin_ack_answer}")
                 
                 # Send ACK
                 message_ACK = send_ACK(address, fin_ack_answer.ACK_num, fin_ack_answer.SEQ_num + 1)
                 self.socket.sendto(message_ACK.to_bytes(), address)
+                print(f"[Sender] Send ACK message.\n {message_ACK}")
                 
                 # Close connection
                 with self.conn_lock:
                     self.conn.pop(address)
-                print(f"Connection to {address} closed. Current active connections are: {self.conn.keys().__repr__}")
+                print(f"[Sender] Connection to {address} closed. Current active connections are: {self.conn.keys()}")
         except Exception as error:
-            print(f"[Client] RDT 4-way handshake close {address} connection failed with {error}")
+            print(f"[Sender] RDT 4-way handshake close {address} connection failed with {error}")
             self.socket.close()
             
     def close_conn_passive(self, address, SEQ_num, ACK_num):
@@ -466,14 +470,17 @@ class RDTSocket():
             with self.packets_lock:
                 if address in self.packets["FIN_ACK"].keys():
                     fin_ack_answer = self.packets["FIN_ACK"][address]
+            print(f"[Receiver] Received FIN_ACK answer.\n {fin_ack_answer}")
                 
             # Send ACK
             message_ACK = send_ACK(address, fin_ack_answer.ACK_num, fin_ack_answer.SEQ_num + 1)
             self.socket.sendto(message_ACK.to_bytes(), address)
+            print(f"[Receiver] Message ACK sent.\n {message_ACK}")
                 
             # Send FIN ACK
             message_FIN_ACK = send_FIN_ACK(address, SEQ_num, ACK_num)
             self.socket.sendto(message_FIN_ACK.to_bytes(), address)
+            print(f"[Receiver] Message FIN_ACK sent.\n {message_FIN_ACK}")
             
             # Receive ACK
             ack_answer = None
@@ -485,14 +492,14 @@ class RDTSocket():
                             ack_answer = self.packets["ACK"][address]
                 except socket.timeout:
                     self.socket.sendto(message_FIN_ACK.to_bytes(), address)
-            print(f"[Server] Received ACK answer.\n {ack_answer}")
+            print(f"[Receiver] Received ACK answer.\n {ack_answer}")
 
             # Close connection
-            with self.sconn_lock:
+            with self.conn_lock:
                 self.conn.pop(address)
-            print(f"Connection from {address} closed. Current active connections are {self.conn.keys().__repr__}")
+            print(f"[Receiver] Connection from {address} closed. Current active connections are {self.conn.keys()}")
         except Exception as error:
-            print(f"[Client] RDT 4-way handshake close {address} connection failed with {error}")
+            print(f"[Receiver] RDT 4-way handshake close {address} connection failed with {error}")
             self.socket.close()      
     
     def close(self):
