@@ -1,6 +1,7 @@
 import socket
 import os
 import time
+import queue
 from RDT import RDTSocket
 from multiprocessing import Process
 Speed_RDT = 0
@@ -34,7 +35,7 @@ def UDP_send_file(ip, port):
 def UDP_receive_file(ip, port):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((ip, port))
-    save_path = './transmit.txt'
+    save_path = './transmit_udp.txt'
     flag = True
     try:
         data_list = []
@@ -48,11 +49,9 @@ def UDP_receive_file(ip, port):
 
             data_list.append(data)
 
-
         end_time =  time.time()
         print(f"Using UDP file complete: {end_time - start_time} s")
         Speed_UDP = end_time - start_time
-
 
         with open(save_path, "wb") as file:
             for i in data_list:
@@ -61,8 +60,8 @@ def UDP_receive_file(ip, port):
         sock.close()
 
 def UDP_start_test(port=12349):
-    sender = Process(target=UDP_send_file, args=("localhost", port))
-    receiver = Process(target=UDP_receive_file, args=("localhost", port))
+    sender = Process(target=UDP_send_file, args=("127.0.0.1", port))
+    receiver = Process(target=UDP_receive_file, args=("127.0.0.1", port))
 
     receiver.start()
     time.sleep(5)
@@ -73,10 +72,9 @@ def UDP_start_test(port=12349):
     receiver.join()  
     
 
-
 def RDT_start_test(port_source=12346, port_target=12345):
-    sender = Process(target=RDT_send_file, args=(("localhost", port_source), ("localhost", port_target)))
-    receiver = Process(target=RDT_receive_file, args=(("localhost", port_source), ("localhost", port_target)))
+    sender = Process(target=RDT_send_file, args=(("127.0.0.1", port_source), ("127.0.0.1", port_target)))
+    receiver = Process(target=RDT_receive_file, args=(("127.0.0.1", port_source), ("127.0.0.1", port_target)))
 
     receiver.start()
     time.sleep(5)
@@ -100,21 +98,18 @@ def RDT_send_file(source_address, target_address,  file_path = './original.txt')
             source_address:    Source IP address and its port
             file_path:         The file you need to send
     """
-    server = RDT.RDTSocket()
-    server.bind(source_address)
-    server.listen(5)
-    while True:
-        try:
-            addr = server.accept()
-            if addr:
-                print(f"Server connected to {addr}")
-        except KeyboardInterrupt:
-            break
-        except:
-            continue
+    client = RDTSocket()
+    client.bind(target_address)
+    client.listen(5)
+    client.connect(source_address)
+    file_path = './original.txt'
+    with open(file_path, "rb") as file:
+        data = file.read()
+        client.send(source_address, data)
+        print(f"Client connected to {source_address}")
 
 
-def RDT_receive_file(source_address, target_address, flie_path = './transmit.txt'):
+def RDT_receive_file(source_address, target_address, file_path = './transmit_rdt.txt'):
     """
         Depending on your design, you need to save the received data to flie_path. Make sure the data order is correct and the data is complete. 
         Additionally, you need to time this process, starting from when the receiver receives the first piece of data until the receiver closes the connection.
@@ -131,10 +126,21 @@ def RDT_receive_file(source_address, target_address, flie_path = './transmit.txt
             source_address:    Source IP address and its port
             file_path:         The file path to the received data
     """
-    client = RDT.RDTSocket()
-    client.bind(target_address)
-    client.listen(5)
-    client.connect(source_address)
+    server = RDTSocket()
+    server.bind(source_address)
+    server.listen(5)
+    while True:
+        try:
+            addr = server.accept()
+            if addr == target_address:
+                data_received = server.recv(address=addr)
+                print(f"Server connected to {addr}")
+                with open(file_path, "wb") as file:
+                    file.write(data_received)
+        except KeyboardInterrupt:
+            break
+        except:
+            continue
 
 
 def test_file_integrity(original_path, transmit_path):

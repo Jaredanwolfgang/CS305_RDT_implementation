@@ -9,7 +9,12 @@ class RDTHeader():
         self.ACK_num = ACK_num                  # 4 bytes
         self.LEN = LEN                          # 4 bytes
         self.CHECKSUM = CHECKSUM                # 2 bytes
-        self.PAYLOAD = PAYLOAD                  # Data LEN bytes
+        if isinstance(PAYLOAD, str):
+            self.PAYLOAD = PAYLOAD
+        elif isinstance(PAYLOAD, bytes):
+            self.PAYLOAD = PAYLOAD.decode()
+        else:
+            self.PAYLOAD = ""
         # self.CWND = CWND                      # Congestion window size 4 bytes
         self.RWND = RWND                        # Notification window size 4 bytes
         self.ID = 0                             # 2 bytes, Identification Field for any file (Having the same ID means the same file)
@@ -24,6 +29,7 @@ class RDTHeader():
         # Join all bytes data together 
         # (In the order of SYN, FIN, ACK, SEQ_num, 
         # ACK_num, LEN, RWND, CHECKSUM, Reserved, PAYLOAD.).
+        self.CHECKSUM = 0
         if isinstance(self.PAYLOAD, str):
             sum_data = self.SYN.to_bytes(1, 'big') + self.FIN.to_bytes(1, 'big') + self.ACK.to_bytes(1, 'big') + \
                     self.SEQ_num.to_bytes(4, 'big') + self.ACK_num.to_bytes(4, 'big') + self.LEN.to_bytes(4, 'big') + \
@@ -97,8 +103,7 @@ class RDTHeader():
         
         self.checksum_cal()
         CHECKSUM = self.CHECKSUM.to_bytes(2, 'big')
-        
-        PAYLOAD = self.PAYLOAD.encode() if isinstance(self.PAYLOAD, str) else "".encode()
+        PAYLOAD = self.PAYLOAD.encode()
         ID = self.ID.to_bytes(2, 'big')
         SEG_SERAIL = self.SEG_SERIAL.to_bytes(2, 'big')
         Reserved = self.Reserved.to_bytes(4, 'big')

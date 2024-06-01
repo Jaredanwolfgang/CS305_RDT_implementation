@@ -27,7 +27,7 @@ class RDTSocket():
         self.socket = None # Global Socket
         self.address = None
         self.port = None
-        self.timeout = 0.5
+        self.timeout = 5
     
         self.conn_lock = threading.Lock()
         self.queue_lock = threading.Lock()
@@ -59,32 +59,36 @@ class RDTSocket():
     def listen_handler(self):
         while True and self.status:
             try:
-                data, address = self.socket.recvfrom(SENT_SIZE)
-                packet = RDTHeader()
-                packet.from_bytes(data)
+                data = None
+                address = None
+                while data is None:
+                    data, address = self.socket.recvfrom(SENT_SIZE)
+                    packet = RDTHeader()
+                    packet.from_bytes(data)
                 
                 with self.packets_lock:
                     # Sort the incoming data based upon type and sources
                     if packet.SYN == 1 and packet.ACK == 0:
                         self.packets["SYN"][address] = packet
-                        print(f"Receiving SYN data {packet} from {address}")
+                        print(f"[{(self.address, self.port)}] Receiving SYN data {packet} from {address}")
                     elif packet.SYN == 1 and packet.ACK == 1:
                         self.packets["SYN_ACK"][address] = packet
-                        print(f"Receiving SYN_ACK data {packet} from {address}")
+                        print(f"[{(self.address, self.port)}] Receiving SYN_ACK data {packet} from {address}")
                     elif packet.FIN == 1 and packet.ACK == 1:
                         self.packets["FIN_ACK"][address] = packet
-                        print(f"Receiving FIN_ACK data {packet} from {address}")
+                        print(f"[{(self.address, self.port)}] Receiving FIN_ACK data {packet} from {address}")
                     elif packet.ACK == 1 and packet.FIN == 0 and packet.SYN == 0 and (packet.PAYLOAD is None or packet.PAYLOAD == ""):
                         self.packets["ACK"][address] = packet
-                        print(f"Receiving ACK data {packet} from {address}")
+                        print(f"[{(self.address, self.port)}] Receiving ACK data {packet} from {address}")
                     elif packet.PAYLOAD:
                         if(self.packets["DATA"].get(address) is None):
+                            print(f"packets in {address}")
                             self.packets["DATA"][address] = [packet]
                         else:
                             self.packets["DATA"][address].append(packet)
-                        print(f"Receiving DATA {packet} from {address}")
+                        print(f"[{(self.address, self.port)}] Receiving DATA {packet} from {address}")
                     else:
-                        print(f"Received {packet}")
+                        print(f"[{(self.address, self.port)}] Received {packet}")
             except Exception as error:
                 print(f"[Server] Problem in sorting incoming data: {error}")
                 self.status = 0
@@ -173,7 +177,7 @@ class RDTSocket():
                     
                     # Receive ACK response
                     with self.conn_lock:
-                        self.conn[address] = ack_answer
+                        self.conn[address] = "Wait for 0 from below"
                     print(f"[Server] Connection with {address} is created! There are currently {len(self.conn)} connections.")
                     return address
         except Exception as error:
@@ -241,12 +245,14 @@ class RDTSocket():
         sndpkt.set_target_address(address[0], address[1])
         sndpkt.checksum_cal()
         self.socket.sendto(sndpkt.to_bytes(), address)
-        print(f"Message sent.\n {sndpkt}")
-        return time.start() # Start Timer
+        print(f"[{(self.address, self.port)}] Message sent.\n {sndpkt} \n End Packet.\n")
+        return time.time() # Start Timer
     
     def corrupt(self, rcvpkt):
         rcv_checksum = rcvpkt.CHECKSUM
+        print(f"Received packet checksum: {rcvpkt.CHECKSUM}")
         rcvpkt.checksum_cal()
+        print(f"Calculated packet checksum: {rcvpkt.CHECKSUM}")
         if rcv_checksum == rcvpkt.CHECKSUM:
             return False
         else:
@@ -267,46 +273,47 @@ class RDTSocket():
             tcpheader:  Message header.Include SYN, ACK, FIN, CHECKSUM, etc. Use this
                         attribute when needed.
         """
-        # The received data is allocated to the packets dictionary, we only need to process the data in the queue of the corresponding address.
-        # Here should be a finite state machine for deciding the states of sending the data.s
+        # The received data is allocated to the packets dictionary, we only need to process the data in the queue of
+        # the corresponding address. Here should be a finite state machine for deciding the states of sending the data.
         data_seg = [data[i:i+DATA_DIVIDE_LENGTH] for i in range(0, len(data), DATA_DIVIDE_LENGTH)] # Data segmentation
         timer = None
         SEQ_num = 0 # Byte Stream "number" of the first byte in the data
         ACK_num = 0 # Byte Stream "number" of the next byte expected by the sender
-        while (True and address in self.conn.keys()):
+        while True and address in self.conn.keys():
             time.sleep(0.1)
             with self.conn_lock:
-                if(self.conn[address] == "Wait for call 0 from above"):
+                if self.conn[address] == "Wait for call 0 from above":
                     self.conn[address] = "Wait for ACK 0"
-                    if(len(data_seg) == 0):
+                    if len(data_seg) == 0:
                         break
                     timer = self.udt_send(address, data_seg[0], SEQ_num, ACK_num + len(data_seg[0]))
-                elif(self.conn[address] == "Wait for call 1 from above"):
+                elif self.conn[address] == "Wait for call 1 from above":
                     self.conn[address] = "Wait for ACK 1"
-                    if(len(data_seg) == 0):
+                    if len(data_seg) == 0:
                         break
                     timer = self.udt_send(address, data_seg[0], SEQ_num, ACK_num + len(data_seg[0]))
-                elif(self.conn[address] == "Wait for ACK 0"):
+                elif self.conn[address] == "Wait for ACK 0":
                     # There are three states:
                     # 1. The data is sent successfully, and the ACK is received.
                     # 2. The data is sent successfully, but timeout.
                     # 3. The data is sent successfully, but the rcvpkt is corrupted.
                     with self.packets_lock:
+                        # print ("DATA: ", self.packets["DATA"].keys())
                         if address in self.packets["DATA"].keys():
                             rcvpkt = self.packets["DATA"][address].pop()
-                            if (self.corrupt(rcvpkt) or rcvpky.ACK_num != 1):
+                            if self.corrupt(rcvpkt) or rcvpkt.ACK_num != 1:
                                 print("Corrupted ACK packet.")
                                 timer = self.udt_send(address, data_seg[0], SEQ_num, ACK_num)
-                            elif(rcvpkt.ACK_num == 0):
+                            elif rcvpkt.ACK_num == 0:
                                 print("Received ACK packet.")
                                 SEQ_num = 1
                                 ACK_num = rcvpkt.SEQ_num
                                 self.conn[address] = "Wait for call 1 from above"
                                 data_seg.pop(0)
-                        elif(time.time() - timer > self.timeout):
+                        elif time.time() - timer > self.timeout:
                             print("Timeout.")
                             timer = self.udt_send(address, data_seg[0], SEQ_num, ACK_num)
-                elif(self.conn[address] == "Wait for ACK 1"):
+                elif self.conn[address] == "Wait for ACK 1":
                     # There are three states:
                     # 1. The data is sent successfully, and the ACK is received.
                     # 2. The data is sent successfully, but timeout.
@@ -314,18 +321,19 @@ class RDTSocket():
                     with self.packets_lock:
                         if address in self.packets["DATA"].keys():
                             rcvpkt = self.packets["DATA"][address].pop()
-                            if (self.corrupt(rcvpkt) or rcvpkt.ACK_num != 1):
+                            if self.corrupt(rcvpkt) or rcvpkt.ACK_num != 1:
                                 print("Corrupted ACK packet.")
                                 timer = self.udt_send(address, data_seg[0], SEQ_num, ACK_num)
-                            elif(rcvpkt.ACK_num == 1):
+                            elif rcvpkt.ACK_num == 1:
                                 print("Received ACK packet.")
                                 SEQ_num = 0
                                 ACK_num = rcvpkt.SEQ_num
                                 self.conn[address] = "Wait for call 0 from above"
                                 data_seg.pop(0)
-                        elif(time.time() - timer > self.timeout):
+                        elif time.time() - timer > self.timeout:
                             print("Timeout.")
                             timer = self.udt_send(address, data_seg[0], SEQ_num, ACK_num)
+        print("Data sent. Ready to close connection.")
         self.close_conn_active(address, SEQ_num, ACK_num)
         
     def recv(self, address):
@@ -343,23 +351,26 @@ class RDTSocket():
         while(True and address in self.conn.keys()):
             time.sleep(0.1)
             with self.conn_lock:
-                if(self.conn[address] == "Wait for call 0 from below"):
+                if(self.conn[address] == "Wait for 0 from below"):
+                    print("[Receiver] Wait for 0 from below")
                     with self.packets_lock:
                         if address in self.packets["FIN_ACK"].keys():
                             break
                         if address in self.packets["DATA"].keys():
                             rcvpkt = self.packets["DATA"][address].pop()
-                            if(self.corrupt(rcvpkt) or rcvpkt.SEQ_num != 0):
+                            if self.corrupt(rcvpkt) or rcvpkt.SEQ_num != 0:
                                 print("Corrupted DATA packet.")
-                            elif(rcvpkt.SEQ_num == 0):
+                            elif rcvpkt.SEQ_num == 0:
                                 print("Received non-corrupted packet.")
                                 SEQ_num = rcvpkt.ACK_num
                                 ACK_num = 0
-                                self.conn[address] = "Wait for call 1 from below"
-                                data = rcvpkt.PAYLAOD.encode() if isinstance(rcvpkt.PAYLOAD, str) else "".encode()
-                                timer = self.udt_send(address, data, SEQ_num. ACK_num)
+                                self.conn[address] = "Wait for 1 from below"
+                                data = rcvpkt.PAYLOAD
+                                timer = self.udt_send(address, data, SEQ_num, ACK_num)
                                 data_received.append(rcvpkt)
-                elif(self.conn[address] == "Wait for call 1 from below"):
+                    print("debug- O5")
+                elif(self.conn[address] == "Wait for 1 from below"):
+                    print ("[Receiver] Wait for 1 from below")
                     with self.packets_lock:
                         if address in self.packets["FIN_ACK"].keys():
                             break
@@ -371,10 +382,11 @@ class RDTSocket():
                                 print("Received non-corrupted packet.")
                                 SEQ_num = rcvpkt.ACK_num
                                 ACK_num = 1
-                                self.conn[address] = "Wait for call 0 from below"
+                                self.conn[address] = "Wait for 0 from below"
                                 data = rcvpkt.PAYLAOD.encode() if isinstance(rcvpkt.PAYLOAD, str) else "".encode()
-                                timer = self.udt_send(address, data, SEQ_num. ACK_num)
+                                timer = self.udt_send(address, data, SEQ_num, ACK_num)
                                 data_received.append(rcvpkt)
+        print(f"here, since keys = {self.conn.keys()}")
         self.close_conn(address, SEQ_num, ACK_num)
         return data_received
     
@@ -420,7 +432,7 @@ class RDTSocket():
                             if address in self.packets["FIN_ACK"].keys():
                                 in_ack_answer = self.packets["FIN_ACK"][address]
                     except socket.timeout:
-                        self.socket.sendto(message_FIN_ACKto_bytes(), address)
+                        self.socket.sendto(message_FIN_ACK.to_bytes(), address)
                 print(f"[Server] Received FIN_ACK answer.\n {fin_ack_answer}")
                 
                 # Send ACK
