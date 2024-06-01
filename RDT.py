@@ -78,7 +78,7 @@ class RDTSocket():
                         self.packets["ACK"][address] = packet
                         print(f"Receiving ACK data {packet} from {address}")
                     elif packet.PAYLOAD:
-                        if(packets["DATA"].get(address) is None):
+                        if(self.packets["DATA"].get(address) is None):
                             self.packets["DATA"][address] = [packet]
                         else:
                             self.packets["DATA"][address].append(packet)
@@ -376,6 +376,7 @@ class RDTSocket():
                                 timer = self.udt_send(address, data, SEQ_num. ACK_num)
                                 data_received.append(rcvpkt)
         self.close_conn(address, SEQ_num, ACK_num)
+        return data_received
     
     def close_conn_active(self, address, SEQ_num, ACK_num):
         def send_FIN_ACK(address, SEQ_num, ACK_num):
@@ -403,7 +404,7 @@ class RDTSocket():
                 while ack_answer is None:
                     time.sleep(0.25)
                     try:
-                        with packet_lock:
+                        with self.packets_lock:
                             if address in self.packets["ACK"].keys():
                                 ack_answer = self.packets["ACK"][address]
                     except socket.timeout:
@@ -415,7 +416,7 @@ class RDTSocket():
                 while fin_ack_answer is None:
                     time.sleep(0.25)
                     try:
-                        with packet_lock:   
+                        with self.packets_lock:   
                             if address in self.packets["FIN_ACK"].keys():
                                 in_ack_answer = self.packets["FIN_ACK"][address]
                     except socket.timeout:
@@ -427,7 +428,7 @@ class RDTSocket():
                 self.socket.sendto(message_ACK.to_bytes(), address)
                 
                 # Close connection
-                with conn_lock:
+                with self.conn_lock:
                     self.conn.pop(address)
                 print(f"Connection to {address} closed. Current active connections are: {self.conn.keys().__repr__}")
         except Exception as error:
@@ -450,7 +451,7 @@ class RDTSocket():
             return message_ACK
         
         try: 
-            with packets_lock:
+            with self.packets_lock:
                 if address in self.packets["FIN_ACK"].keys():
                     fin_ack_answer = self.packets["FIN_ACK"][address]
                 
@@ -467,7 +468,7 @@ class RDTSocket():
             while ack_answer is None:
                 time.sleep(0.25)
                 try:
-                    with packet_lock:
+                    with self.packets_lock:
                         if address in self.packets["ACK"].keys():
                             ack_answer = self.packets["ACK"][address]
                 except socket.timeout:
@@ -475,7 +476,7 @@ class RDTSocket():
             print(f"[Server] Received ACK answer.\n {ack_answer}")
 
             # Close connection
-            with conn_lock:
+            with self.sconn_lock:
                 self.conn.pop(address)
             print(f"Connection from {address} closed. Current active connections are {self.conn.keys().__repr__}")
         except Exception as error:

@@ -74,9 +74,9 @@ def UDP_start_test(port=12349):
     
 
 
-def RDT_start_test(port=12345):
-    sender = Process(target=RDT_send_file, args=("localhost", port))
-    receiver = Process(target=RDT_receive_file, args=("localhost", port))
+def RDT_start_test(port_source=12346, port_target=12345):
+    sender = Process(target=RDT_send_file, args=(("localhost", port_source), ("localhost", port_target)))
+    receiver = Process(target=RDT_receive_file, args=(("localhost", port_source), ("localhost", port_target)))
 
     receiver.start()
     time.sleep(5)
@@ -100,10 +100,18 @@ def RDT_send_file(source_address, target_address,  file_path = './original.txt')
             source_address:    Source IP address and its port
             file_path:         The file you need to send
     """
-   
-    #############################################################################
-    # TODO: NECESSARY ATTRIBUTES HERE                                           #
-    #############################################################################
+    server = RDT.RDTSocket()
+    server.bind(source_address)
+    server.listen(5)
+    while True:
+        try:
+            addr = server.accept()
+            if addr:
+                print(f"Server connected to {addr}")
+        except KeyboardInterrupt:
+            break
+        except:
+            continue
 
 
 def RDT_receive_file(source_address, target_address, flie_path = './transmit.txt'):
@@ -123,11 +131,10 @@ def RDT_receive_file(source_address, target_address, flie_path = './transmit.txt
             source_address:    Source IP address and its port
             file_path:         The file path to the received data
     """
-    
-
-    #############################################################################
-    # TODO: NECESSARY ATTRIBUTES HERE                                           #
-    #############################################################################
+    client = RDT.RDTSocket()
+    client.bind(target_address)
+    client.listen(5)
+    client.connect(source_address)
 
 
 def test_file_integrity(original_path, transmit_path):
@@ -158,8 +165,6 @@ def test_throughput():
         test_file_integrity('./original.txt', './transmit.txt')
     except Exception as e:
         print(e)
-
-
 
 if __name__ == '__main__':
     test_throughput()
