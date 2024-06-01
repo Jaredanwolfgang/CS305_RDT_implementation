@@ -82,7 +82,6 @@ def RDT_start_test(port_source=12345, port_target=12346):
 
     sender.join()
     receiver.join()
-    
 
 
 def RDT_send_file(source_address, target_address,  file_path = './original.txt'):
@@ -107,7 +106,8 @@ def RDT_send_file(source_address, target_address,  file_path = './original.txt')
         data = file.read()
         client.send(source_address, data)
         print(f"Client connected to {source_address}")
-
+    client.close()
+    return
 
 def RDT_receive_file(source_address, target_address, file_path = './transmit_rdt.txt'):
     """
@@ -134,18 +134,24 @@ def RDT_receive_file(source_address, target_address, file_path = './transmit_rdt
             addr = server.accept()
             if addr == target_address:
                 data_received = server.recv(address=addr)
-                print(f"Server connected to {addr}")
-                with open(file_path, "wb") as file:
-                    file.write(data_received)
+                break
         except KeyboardInterrupt:
             break
         except:
             continue
 
+    print(f"Server connected to {addr}")
+    print(data_received)
+    with open(file_path, "wb") as file:
+        for i in data_received:
+            file.write(i)
+    server.close()
+    return
 
 def test_file_integrity(original_path, transmit_path):
 
     with open(original_path, 'rb') as file1, open(transmit_path, 'rb') as file2:
+        print("Conducting file integrity test.")
         while True:
             block1 = file1.read(4096)
             block2 = file2.read(4096)
@@ -168,7 +174,7 @@ def test_throughput():
     # Yours
     try:
         RDT_start_test()
-        test_file_integrity('./original.txt', './transmit.txt')
+        test_file_integrity('./original.txt', './transmit_rdt.txt')
     except Exception as e:
         print(e)
 
