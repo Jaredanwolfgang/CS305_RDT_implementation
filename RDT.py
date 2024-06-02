@@ -17,9 +17,22 @@ SENT_SIZE = RDT_HEADER_LENGTH + DATA_LENGTH
 SEQ_LEFT = 0
 SEQ_RIGHT = 1000
 
+class sender_state(enumerate):
+    WAIT_FOR_CALL_0 = 0
+    WAIT_FOR_CALL_1 = 1
+    WAIT_FOR_ACK_0 = 2
+    WAIT_FOR_ACK_1 = 3
+
+class receiver_state(enumerate):
+    WAIT_FOR_0 = 0
+    WAIT_FOR_1 = 1
+
+class sender_congestion_state(enumerate):
+    WAIT = 0
+    SEND = 1
+    RESEND = 2
+
 class RDTSocket():
-    sender_state = ['Wait for call 0 from above', 'Wait for call 1 from above', 'Wait for ACK 0', 'Wait for ACK 1']
-    receiver_state = ['Wait for 0 from below', 'Wait for 1 from below']
     def __init__(self) -> None:
         """
         You shold define necessary attributes in this function to initialize the RDTSocket
@@ -262,7 +275,7 @@ class RDTSocket():
         else:
             return True
         
-    def send(self, address, data=None, tcpheader=None):
+    def send(self, address, data=None, tcpheader=None, testcase = 0):
         """
         RDT can use this function to send specified data to a target that has already 
         established a reliable connection. Please note that the corresponding CHECKSUM 
@@ -339,11 +352,76 @@ class RDTSocket():
         self.close_conn_active(address, SEQ_num, ACK_num)
         return
 
-    def send_congestion(self, address, data=None, tcpheader=None):
+    def send_congestion(self, address, data=None, tcpheader=None, testcase = 0):
         controller = congestion.CongestionController()
+        # Data segmentation
         data_seg = [data[i:i+DATA_DIVIDE_LENGTH] for i in range(0, len(data), DATA_DIVIDE_LENGTH)]
-        data_queue = [RDTHeader(PAYLOAD=data) for data in data_seg]
-        pass
+
+        # State Machine:
+        # Wait_state: 1. Send 2. Wait 3. Resend -> Determine the sender state
+        # Send_state: 1. Slow Start 2. Congestion Avoidance 3. Fast Recovery -> Determine the cwnd
+        wait_state = sender_congestion_state.SEND
+        send_state = controller.get_state()
+
+        # Time related module
+        timeoutInterval = controller.get_timeout_interval() # Time out interval
+        timer = {}
+        sampleRTT = 0
+
+        # Information
+        SEQ_num = 0 # Define the start of the byte stream
+        ACK_num = [] # Define the next byte stream expected by the sender
+        offset = 0 # Define the start of the segments
+        acked = 0 # Define the number of segments that have been acknowledged
+
+        # Reserved Information, used to reorder the segment.
+        data_id = random.randint(0, 65536) # Randomly generate a data ID
+        segment_id = 0
+
+        rwnd = 64 # Notification window size
+        wnd = 0 # Window size
+        while True and address in self.conn.keys():
+            # .controller.update(wait_state == sender_congestion_state.SEND)
+            wnd = min(controller.get_cwnd(), rwnd)
+            if wait_state == sender_congestion_state.SEND:
+                ACK_num = [0] * wnd
+                while wnd != 0:
+                    time_start = self.udt_send(address, data_seg[offset], SEQ_num, ACK_num)
+                    timer[segment_id] = time_start
+                    SEQ_num += len(data_seg[offset])
+                    ACK_num[offset] = SEQ_num # Store the next byte stream expected by the sender
+                    offset += 1
+                    wnd -= 1
+                    segment_id += 1
+                    if offset == len(data_seg):
+                        break
+                wait_state = sender_congestion_state.WAIT
+            elif wait_state == sender_congestion_state.WAIT:
+                with self.packets_lock:
+                    if address in self.packets["DATA"].keys() and len(self.packets["DATA"][address]) != 0:
+                        rcvpkt = self.packets["DATA"][address].pop()
+                        if self.corrupt(rcvpkt) or rcvpkt.ACK_num != ACK_num[acked]:
+                            print("[Sender] Corrupted ACK packet.")
+                            wait_state = sender_congestion_state.RESEND
+                        elif rcvpkt.ACK_num == ACK_num[acked]:
+                            print("[Sender] Received ACK packet.")
+                            acked += 1
+                            if acked == len(data_seg):
+                                break
+                            if acked == offset:
+                                wait_state = sender_congestion_state.SEND
+                        elif rcvpkt.ACK_num == ACK_num[acked - 1]:
+                            controller.duplicate_ack()
+                if time.time() - timer > timeoutInterval:
+                    print("Timeout.")
+                    wait_state = sender_congestion_state.RESEND
+                    controller.timeout()
+            elif wait_state == sender_congestion_state.RESEND:
+                offset = acked
+
+
+
+
 
     def recv(self, address):
         """
@@ -357,7 +435,7 @@ class RDTSocket():
         SEQ_num = 0
         ACK_num = 0
         data_received = []
-        while(True and address in self.conn.keys()):
+        while True and address in self.conn.keys():
             time.sleep(0.1)
             with self.conn_lock:
                 if(self.conn[address] == "Wait for 0 from below"):
