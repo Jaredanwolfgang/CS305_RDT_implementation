@@ -39,14 +39,17 @@ def UDP_receive_file(ip, port):
     flag = True
     try:
         data_list = []
+        cnt = 0
         while True:
+            last_time = time.time()
             data, addr = sock.recvfrom(1024)
+            cnt += 1
             if flag:
                 start_time = time.time()
                 flag = False
             if data == b'end':
                 break
-
+            # print(f"UDP packet[{cnt}] time: {time.time() - last_time}")
             data_list.append(data)
 
         end_time =  time.time()
@@ -100,12 +103,13 @@ def RDT_send_file(source_address, target_address,  file_path = './original.txt')
     client = RDTSocket()
     client.bind(target_address)
     client.listen(5)
-    client.connect(source_address)
-    file_path = './original.txt'
-    with open(file_path, "rb") as file:
-        data = file.read()
-        client.send(source_address, data)
-        print(f"Client connected to {source_address}")
+    address = client.connect(source_address)
+    if(address == source_address):
+        file_path = './original.txt'
+        with open(file_path, "rb") as file:
+            data = file.read()
+            client.send(source_address, data)
+            print(f"Client connected to {source_address}")
     client.close()
     return
 
@@ -132,16 +136,17 @@ def RDT_receive_file(source_address, target_address, file_path = './transmit_rdt
     while True:
         try:
             addr = server.accept()
+            start_time = time.time()
             if addr == target_address:
                 data_received = server.recv(address=addr)
+                print(f"RDT time {time.time() - start_time}")
                 break
         except KeyboardInterrupt:
             break
         except:
             continue
-
     print(f"Server connected to {addr}")
-    print(data_received)
+    # print(data_received)
     with open(file_path, "wb") as file:
         for i in data_received:
             file.write(i)
@@ -155,7 +160,7 @@ def test_file_integrity(original_path, transmit_path):
         while True:
             block1 = file1.read(4096)
             block2 = file2.read(4096)
-            
+
             if block1 != block2:
                 raise Exception("Contents is different")
             

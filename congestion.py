@@ -14,14 +14,15 @@ class CongestionController():
         self.devRTT = 0
         self.sampleRTT = 0
         self.timeoutInterval = 1
-    def update(self, acked):
+
+    def update(self):
         self.lock.acquire()
         if self.state == state.SLOW_START:
-            self.cwnd += acked
+            self.cwnd *= 2
             if self.cwnd >= self.ssthresh:
                 self.state = state.CONGESTION_AVOIDANCE
         elif self.state == state.CONGESTION_AVOIDANCE:
-            self.cwnd += acked
+            self.cwnd += 1
         elif self.state == state.FAST_RECOVERY:
             self.cwnd = self.ssthresh
             self.state = state.CONGESTION_AVOIDANCE

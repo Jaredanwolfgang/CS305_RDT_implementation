@@ -1,7 +1,6 @@
 class RDTHeader():
     def __init__(self, SYN: int = 0, FIN: int = 0, ACK: int = 0, SEQ_num: int = 0, ACK_num: int = 0, LEN: int = 0, CHECKSUM: int = 0, PAYLOAD = None, RWND: int = 0)  -> None:
         self.test_case = 0                      # Indicate the test case that will be used
-        
         self.SYN = SYN                          # 1 bytes
         self.FIN = FIN                          # 1 bytes
         self.ACK = ACK                          # 1 bytes
@@ -21,8 +20,8 @@ class RDTHeader():
         self.SEG_SERIAL = 0                     # 2 bytes, When conducting data segment transmission, the serial number of the segment
         self.Reserved = 0                       # 4 bytes, Reserved field
         
-        self.Source_address = [127,0,0,1,12334] # Souce ip and port: each segment of IP takes 1 byte, the port takes 2 bytes
-        self.Target_address = [127,0,0,1,12345] # Target ip and port
+        self.Source_address = [127, 0, 0, 1, 12334] # Souce ip and port: each segment of IP takes 1 byte, the port takes 2 bytes
+        self.Target_address = [127, 0, 0, 1, 12345] # Target ip and port
     
     def checksum_cal(self):
         # Step 1:

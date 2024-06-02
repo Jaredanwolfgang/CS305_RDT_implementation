@@ -11,13 +11,12 @@ import signal
 # toReceiverAddr = ('10.16.52.94', 12346)         # ToSender
 # fromReceiverAddr = ('10.16.52.94', 12347)       # FromReceiver
 # toSenderAddr = ('10.16.52.94', 12348)           # ToReceiver
-
+#
 # resultAddr = ('10.16.52.94', 12230)
-
-# #TODO change the adress to your address
-# sender_address = ("10.16.56.14", 12344)         # Your sender address
-# receiver_address = ("10.16.56.14", 12349)       # Your receiver address
-
+#
+# # TODO change the address to your address
+# sender_address = ("10.32.72.227", 12344)         # Your sender address
+# receiver_address = ("10.32.72.227", 12349)       # Your receiver address
 
 
 # connect locally server
@@ -31,6 +30,7 @@ toSenderAddr = ('127.0.0.1', 12348)
 sender_address = ("127.0.0.1", 12244)
 receiver_address = ("127.0.0.1", 12249)
 resultAddr = ("127.0.0.1", 12230)
+
 num_test_case = 16
 
 class TimeoutException(Exception):
@@ -44,21 +44,21 @@ def handler(signum, frame):
 
 def test_case():
     sender_sock = None
-    reciever_sock = None
+    receiver_sock = None
 
     # TODO: You could change the range of this loop to test specific case(s) in local test.
 
     for i in range(num_test_case):
         if sender_sock:
             del sender_sock
-        if reciever_sock:
-            del reciever_sock
-        sender_sock = RDTSocket()   # You can change the initialize RDTSocket()
-        reciever_sock = RDTSocket() # You can change the initialize RDTSocket()
+        if receiver_sock:
+            del receiver_sock
+        sender_sock = RDTSocket()    # You can change the initialize RDTSocket()
+        receiver_sock = RDTSocket()  # You can change the initialize RDTSocket()
         print(f"Start test case : {i}")
 
         try:
-            result = RDT_start_test(sender_sock, reciever_sock, sender_address, receiver_address, i)
+            result = RDT_start_test(sender_sock, receiver_sock, sender_address, receiver_address, i)
         except Exception as e:
             print(e)
         finally:
@@ -86,14 +86,13 @@ def test_case():
             # close them in the other places.
 
             sender_sock.close()
-            reciever_sock.close()
+            receiver_sock.close()
 
         #############################################################################
             time.sleep(5)
 
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.sendto(f"{sender_address}-{receiver_address}".encode(), proxy_server_address) 
-
+            sock.sendto(f"{sender_address}-{receiver_address}".encode(), proxy_server_address)
 
             time.sleep(10)
     
@@ -138,13 +137,14 @@ def RDT_send(sender_sock: RDTSocket, source_address, target_address, test_case):
     sock.proxy_server_addr = fromSenderAddr
 
     sock.bind(source_address)
+    sock.listen(5)
     sock.connect(target_address)
 
     if test_case >= 5:
         #############################################################################
             # TODO: you need to send a files. Here you need to write the code according to your own implementation.
 
-            raise NotImplementedError
+        raise NotImplementedError
         #############################################################################
         
     else:
@@ -154,32 +154,30 @@ def RDT_send(sender_sock: RDTSocket, source_address, target_address, test_case):
             # data = "Short Message test"
             # sock.send(data=data, test_case=test_case)
 
-            raise NotImplementedError
+        raise NotImplementedError
         #############################################################################
 
 
-
-def RDT_receive(reciever_sock: RDTSocket, source_address, test_case):
+def RDT_receive(receiver_sock: RDTSocket, source_address, test_case):
     """
         You should refer to your own implementation to implement this code. the receiver should specify the Source_address, Target_address, and test_case in the Header of all packets sent by the receiver.
         params: 
             source_address:    Source IP address and its port
             test_case:         The rank of test case
     """
-    sock = reciever_sock
+    sock = receiver_sock
     sock.proxy_server_addr = fromReceiverAddr
     sock.bind(source_address)
     server_sock = sock.accept()
 
-
-
     if test_case >= 5:
+        pass
         #############################################################################
             # TODO: you need to receive original.txt from sender. Here you need to write the code according to your own implementation.
-
+        # with open("./transmit_rdt.txt", "rb") as file:
+            #
             # you should Save all data to the file (transmit.txt), and stop this loop when the client close the connection. 
             # After that, you need to use the following function to verify the file that you received. When test_case >= 5, the test is passed only when test_file_integrity is verified and the proxy is verified.
-            raise NotImplementedError
         #############################################################################
         
     else:
@@ -187,8 +185,9 @@ def RDT_receive(reciever_sock: RDTSocket, source_address, test_case):
         #############################################################################
             # TODO: you need to receive a short message. May be you can use:
             # data = server_sock.recv() 
-
-            raise NotImplementedError
+        with open("./transmit_rdt.txt", 'rb') as file:
+            pass
+            # file.write(data)
         #############################################################################
 
         
@@ -206,6 +205,7 @@ def test_file_integrity(original_path, transmit_path):
                 break
 
     return True      
-        
+
+
 if __name__ == '__main__':
     test_case()
