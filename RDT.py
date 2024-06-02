@@ -3,6 +3,7 @@ import random
 import threading
 import time
 from Header import RDTHeader
+import congestion
 from concurrent.futures import ThreadPoolExecutor
 
 # References:
@@ -337,14 +338,20 @@ class RDTSocket():
         print("[Sender] Data sent. Ready to close connection.")
         self.close_conn_active(address, SEQ_num, ACK_num)
         return
-        
+
+    def send_congestion(self, address, data=None, tcpheader=None):
+        controller = congestion.CongestionController()
+        data_seg = [data[i:i+DATA_DIVIDE_LENGTH] for i in range(0, len(data), DATA_DIVIDE_LENGTH)]
+        data_queue = [RDTHeader(PAYLOAD=data) for data in data_seg]
+        pass
+
     def recv(self, address):
         """
         You should implement the basic logic for receiving data in this function, and 
         verify the data. When corrupted or missing data packets are detected, a request 
         for retransmission should be sent to the other party.
         
-        This function should be bolcking.
+        This function should be blocking.
         """
         timer = None
         SEQ_num = 0

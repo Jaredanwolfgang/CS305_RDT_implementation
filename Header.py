@@ -82,6 +82,9 @@ class RDTHeader():
     def set_target_address(self, ip, port):
         self.Target_address = [int(i) for i in ip.split('.')]
         self.Target_address.append(port)
+
+    def set_seq_number(self, seq_number):
+        self.SEQ_num = seq_number
     
     def to_bytes(self):
         test_case = self.test_case.to_bytes(1, 'big')
