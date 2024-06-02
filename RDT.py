@@ -298,11 +298,13 @@ class RDTSocket():
         ctrl = congestion.CongestionController()
 
         while len(un_acked) != 0:
-            cwnd = ctrl.cwnd
+            cwnd, cnt = ctrl.cwnd, 0
             st = []
             print(cwnd, len(un_acked))
             with self.packets_lock:
                 self.packets["DATA"][address] = []
+
+            RTT = time.time()
             while cwnd != 0 and len(un_acked) != 0:
                 seq = un_acked.pop(0)
                 st.append(seq)
@@ -310,11 +312,8 @@ class RDTSocket():
                 ACK_num = SEQ_num + len(data_seg[seq])
                 self.udt_send_t(address, data_seg[seq], SEQ_num, ACK_num)
                 cwnd -= 1
-            RTT = time.time()
-            self.udt_send_t(address, " ", 0, 0)
-            self.udt_send_t(address, " ", 0, 0)
-            self.udt_send_t(address, " ", 0, 0)
-            probe_time = 0
+                cnt += 1
+            probe_time = 31
             while True:
                 probe_time += 1
                 if probe_time != 32:
@@ -325,13 +324,24 @@ class RDTSocket():
                         break
             RTT = time.time() - RTT
             # print(RTT)
-            time.sleep(max(0, ctrl.timeoutInterval - RTT))
+            timer = time.time()
             ctrl.set_timeout_interval(RTT)
-            with self.packets_lock:
-                q = self.packets["DATA"][address]
-            for pkt in q:
-                if not self.corrupt(pkt) and pkt.ACK_num > 0:
-                    is_acked[ByteId(pkt.ACK_num - 1)] = True
+            while cnt > 0:
+                with self.packets_lock:
+                    if len(self.packets["DATA"][address]) != 0:
+                        pkt = self.packets["DATA"][address].pop()
+                        if not self.corrupt(pkt) and pkt.ACK_num > 0:
+                            cnt -= not is_acked[ByteId(pkt.ACK_num - 1)]
+                            is_acked[ByteId(pkt.ACK_num - 1)] = True
+                if time.time() - timer >= ctrl.timeoutInterval:
+                    break
+
+            # print(ctrl.timeoutInterval)
+            # with self.packets_lock:
+            #     q = self.packets["DATA"][address]
+            # for pkt in q:
+            #     if not self.corrupt(pkt) and pkt.ACK_num > 0:
+            #         is_acked[ByteId(pkt.ACK_num - 1)] = True
             st.reverse()
             flag = True
             for i in st:
@@ -339,7 +349,7 @@ class RDTSocket():
                     un_acked.insert(0, i)
                     flag = False
             if flag:
-                ctrl.update(ctrl.cwnd)
+                ctrl.update()
             else:
                 ctrl.timeout()
 
