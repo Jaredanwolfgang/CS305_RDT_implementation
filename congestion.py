@@ -7,12 +7,12 @@ class CongestionController():
     def __init__(self):
         self.state = state.SLOW_START
         self.cwnd = 1
-        self.ssthresh = 256
+        self.ssthresh = 512
         self.dup_ack = 0
-        self.estimatedRTT = 0.3
+        self.estimatedRTT = 0.2
         self.devRTT = 0
         self.sampleRTT = 0
-        self.timeoutInterval = 1
+        self.timeoutInterval = 0.2
     def update(self, acked):
         if self.state == state.SLOW_START:
             self.cwnd += acked

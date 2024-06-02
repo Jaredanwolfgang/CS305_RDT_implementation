@@ -300,9 +300,9 @@ class RDTSocket():
         while len(un_acked) != 0:
             cwnd = ctrl.cwnd
             st = []
+            print(cwnd, len(un_acked))
             with self.packets_lock:
                 self.packets["DATA"][address] = []
-            RTT = time.time()
             while cwnd != 0 and len(un_acked) != 0:
                 seq = un_acked.pop(0)
                 st.append(seq)
@@ -310,27 +310,35 @@ class RDTSocket():
                 ACK_num = SEQ_num + len(data_seg[seq])
                 self.udt_send_t(address, data_seg[seq], SEQ_num, ACK_num)
                 cwnd -= 1
+            RTT = time.time()
+            self.udt_send_t(address, " ", 0, 0)
+            self.udt_send_t(address, " ", 0, 0)
+            self.udt_send_t(address, " ", 0, 0)
             probe_time = 0
             while True:
                 probe_time += 1
-                if probe_time != 256:
+                if probe_time != 32:
                     continue
                 probe_time = 0
                 with self.packets_lock:
                     if len(self.packets["DATA"][address]) != 0:
                         break
             RTT = time.time() - RTT
+            # print(RTT)
             time.sleep(max(0, ctrl.timeoutInterval - RTT))
             ctrl.set_timeout_interval(RTT)
             with self.packets_lock:
                 q = self.packets["DATA"][address]
             for pkt in q:
-                is_acked[ByteId(pkt.ACK_num - 1)] = True
+                if not self.corrupt(pkt) and pkt.ACK_num > 0:
+                    is_acked[ByteId(pkt.ACK_num - 1)] = True
             st.reverse()
+            flag = True
             for i in st:
                 if not is_acked[i]:
                     un_acked.insert(0, i)
-            if len(q) == ctrl.cwnd:
+                    flag = False
+            if flag:
                 ctrl.update(ctrl.cwnd)
             else:
                 ctrl.timeout()
@@ -370,8 +378,10 @@ class RDTSocket():
             for pkt in q:
                 if self.corrupt(pkt):
                     continue
-                self.udt_send_t(address, pkt.PAYLOAD, pkt.ACK_num, pkt.ACK_num)
-                pkt_recv[pkt.SEQ_num] = pkt.PAYLOAD.encode()
+                data: str = " "
+                self.udt_send_t(address, data, pkt.ACK_num, pkt.ACK_num)
+                if pkt.ACK_num != pkt.SEQ_num:
+                    pkt_recv[pkt.SEQ_num] = pkt.PAYLOAD.encode()
         self.close_conn_passive(address, SEQ_num, ACK_num)
         return [byte for byte in pkt_recv.values()]
     
@@ -400,7 +410,7 @@ class RDTSocket():
                 # Receive ACK
                 ack_answer = None
                 while ack_answer is None:
-                    time.sleep(0.25)
+                    # time.sleep(0.25)
                     try:
                         with self.packets_lock:
                             if address in self.packets["ACK"].keys():
@@ -412,7 +422,7 @@ class RDTSocket():
                 # Receive FIN ACK
                 fin_ack_answer = None
                 while fin_ack_answer is None:
-                    time.sleep(0.25)
+                    # time.sleep(0.25)
                     try:
                         with self.packets_lock:   
                             if address in self.packets["FIN_ACK"].keys():
@@ -469,7 +479,7 @@ class RDTSocket():
             # Receive ACK
             ack_answer = None
             while ack_answer is None:
-                time.sleep(0.25)
+                # time.sleep(0.25)
                 try:
                     with self.packets_lock:
                         if address in self.packets["ACK"].keys():
