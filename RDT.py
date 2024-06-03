@@ -49,6 +49,8 @@ class RDTSocket():
         self.sort_thread = None
         self.conn_thread = None
 
+        self.maxsize = 512
+
     def bind(self, address: (str, int)): # type: ignore
         """
         When trying to establish a connection. The socket must be bound to an address 
@@ -76,6 +78,7 @@ class RDTSocket():
                 address = None
                 while data is None:
                     data, _ = self.socket.recvfrom(SENT_SIZE)
+                    self.maxsize += 1
                     # print(f"{self.port}: Received!")
                     packet = RDTHeader()
                     packet.from_bytes(data)
@@ -153,25 +156,11 @@ class RDTSocket():
         the underlying UDP.
         """
         def send_SYN_ACK(address, SEQ_num, ACK_num):
-            message_SYN_ACK = RDTHeader(1, 0, 1, SEQ_num, ACK_num, 0, 0, None, 0)
+            message_SYN_ACK = RDTHeader(1, 0, 1, SEQ_num, ACK_num, 0, 0, None, self.maxsize)
             message_SYN_ACK.set_source_address(self.address, self.port)
             message_SYN_ACK.set_target_address(address[0], address[1])
             message_SYN_ACK.checksum_cal()
             return message_SYN_ACK
-        
-        def send_FIN_ACK(address, SEQ_num, ACK_num):
-            message_FIN_ACK = RDTHeader(0, 1, 1, SEQ_num, ACK_num, 0, 0, None, 0)
-            message_FIN_ACK.set_source_address(self.address, self.port)
-            message_FIN_ACK.set_target_address(address[0], address[1])
-            message_FIN_ACK.checksum_cal()
-            return message_FIN_ACK
-        
-        def send_ACK(address, SEQ_num, ACK_num):
-            message_ACK = RDTHeader(0, 0, 1, SEQ_num, ACK_num, 0, 0, None, 0)
-            message_ACK.set_source_address(self.address, self.port)
-            message_ACK.set_target_address(address[0], address[1])
-            message_ACK.checksum_cal()
-            return message_ACK
         
         try:
             while True:
@@ -189,6 +178,7 @@ class RDTSocket():
                         try:
                             if address in self.packets["ACK"].keys():
                                 ack_answer = self.packets["ACK"].pop(address)
+                                self.maxsize += 1
                         except self.socket.timeout:
                             self.socket.sendto(message_SYN_ACK.to_bytes(), fromReceiverAddr)
                     # print(f"[Server] Received ACK answer.\n {ack_answer}")
@@ -212,14 +202,14 @@ class RDTSocket():
             address:    Target IP address and its port
         """
         def send_SYN(address, SEQ_num, ACK_num):
-            message_SYN = RDTHeader(1, 0, 0, SEQ_num, ACK_num, 0, 0, None, 0)
+            message_SYN = RDTHeader(1, 0, 0, SEQ_num, ACK_num, 0, 0, None, self.maxsize)
             message_SYN.set_source_address(self.address, self.port)
             message_SYN.set_target_address(address[0], address[1])
             message_SYN.checksum_cal()
             return message_SYN
         
         def send_ACK(address, SEQ_num, ACK_num):
-            message_ACK = RDTHeader(0, 0, 1, SEQ_num, ACK_num, 0, 0, None, 0)
+            message_ACK = RDTHeader(0, 0, 1, SEQ_num, ACK_num, 0, 0, None, self.maxsize)
             message_ACK.set_source_address(self.address, self.port)
             message_ACK.set_target_address(address[0], address[1])
             message_ACK.checksum_cal()
@@ -230,12 +220,6 @@ class RDTSocket():
             # Send SYN
             message_SYN = send_SYN(address, random.randint(SEQ_LEFT, SEQ_RIGHT), 0)
             self.socket.sendto(message_SYN.to_bytes(), fromSenderAddr)
-            # self.socket.sendto(message_SYN.to_bytes(), fromSenderAddr)
-            # self.socket.sendto(message_SYN.to_bytes(), fromSenderAddr)
-            # self.socket.sendto(message_SYN.to_bytes(), fromSenderAddr)
-            # self.socket.sendto(message_SYN.to_bytes(), fromSenderAddr)
-            # self.socket.sendto(message_SYN.to_bytes(), fromSenderAddr)
-
             # print(f"[Client] Message SYN sent.\n {message_SYN}")
         
             # Receive SYN_ACK
@@ -244,6 +228,7 @@ class RDTSocket():
                 try:
                     if address in self.packets["SYN_ACK"].keys():
                         syn_ack_answer = self.packets["SYN_ACK"].pop(address)
+                        self.maxsize += 1
                 except self.socket.timeout:
                     self.socket.sendto(message_SYN.to_bytes(), fromSenderAddr)
             # print(f"[Client] Message SYN_ACK received.\n {syn_ack_answer}")
@@ -272,7 +257,7 @@ class RDTSocket():
     #     return time.time() # Start Timer
 
     def udt_send_t(self, address, data, SEQ_num, ACK_num, proxy, test_case=20) -> None:
-        sndpkt = RDTHeader(0, 0, 0, SEQ_num, ACK_num, len(data), 0, data, 0)
+        sndpkt = RDTHeader(0, 0, 0, SEQ_num, ACK_num, len(data), 0, data, self.maxsize)
         sndpkt.set_test_case(test_case)
         sndpkt.set_source_address(self.address, self.port)
         sndpkt.set_target_address(address[0], address[1])
@@ -316,9 +301,10 @@ class RDTSocket():
         is_acked = [False for _ in range(len(data_seg))]
         un_acked = [i for i in range(len(data_seg))]
         ctrl = congestion.CongestionController()
+        rwnd = 512
 
         while len(un_acked) != 0:
-            cwnd, cnt = ctrl.cwnd, 0
+            cwnd, cnt = min(ctrl.cwnd, rwnd), 0
             st = []
             print(cwnd, len(un_acked))
             with self.packets_lock:
@@ -352,6 +338,8 @@ class RDTSocket():
                 with self.packets_lock:
                     if len(self.packets["DATA"][address]) != 0:
                         pkt = self.packets["DATA"][address].pop()
+                        rwnd = pkt.rwnd
+                        self.maxsize += 1
                         if not self.corrupt(pkt) and pkt.ACK_num > 0:
                             cnt -= not is_acked[ByteId(pkt.ACK_num - 1)]
                             is_acked[ByteId(pkt.ACK_num - 1)] = True
@@ -378,12 +366,6 @@ class RDTSocket():
         self.close_conn_active(address, SEQ_num, ACK_num)
         return
 
-    def send_congestion(self, address, data=None, tcpheader=None):
-        controller = congestion.CongestionController()
-        data_seg = [data[i:i+DATA_DIVIDE_LENGTH] for i in range(0, len(data), DATA_DIVIDE_LENGTH)]
-        data_queue = [RDTHeader(PAYLOAD=data) for data in data_seg]
-        pass
-
     def recv(self, address, test_case=20):
         """
         You should implement the basic logic for receiving data in this function, and 
@@ -406,6 +388,7 @@ class RDTSocket():
                 if address not in self.packets["DATA"].keys() or len(self.packets["DATA"][address]) == 0:
                     continue
                 q = self.packets["DATA"][address].copy()
+                self.maxsize += len(q)
                 self.packets["DATA"][address] = []
             for pkt in q:
                 if self.corrupt(pkt):
@@ -420,14 +403,14 @@ class RDTSocket():
     
     def close_conn_active(self, address, SEQ_num, ACK_num):
         def send_FIN_ACK(address, SEQ_num, ACK_num):
-            message_FIN_ACK = RDTHeader(0, 1, 1, SEQ_num, ACK_num, 0, 0, None, 0)
+            message_FIN_ACK = RDTHeader(0, 1, 1, SEQ_num, ACK_num, 0, 0, None, self.maxsize)
             message_FIN_ACK.set_source_address(self.address, self.port)
             message_FIN_ACK.set_target_address(address[0], address[1])
             message_FIN_ACK.checksum_cal()
             return message_FIN_ACK
             
         def send_ACK(address, SEQ_num, ACK_num):
-            message_ACK = RDTHeader(0, 0, 1, SEQ_num, ACK_num, 0, 0, None, 0)
+            message_ACK = RDTHeader(0, 0, 1, SEQ_num, ACK_num, 0, 0, None, self.maxsize)
             message_ACK.set_source_address(self.address, self.port)
             message_ACK.set_target_address(address[0], address[1])
             message_ACK.checksum_cal()
@@ -448,6 +431,7 @@ class RDTSocket():
                         with self.packets_lock:
                             if address in self.packets["ACK"].keys():
                                 ack_answer = self.packets["ACK"].pop(address)
+                                self.maxsize += 1
                     except socket.timeout:
                         self.socket.sendto(message_FIN_ACK.to_bytes(), fromSenderAddr)
                 # print(f"[Sender] Received ACK answer.\n {ack_answer}")
@@ -460,6 +444,7 @@ class RDTSocket():
                         with self.packets_lock:   
                             if address in self.packets["FIN_ACK"].keys():
                                 fin_ack_answer = self.packets["FIN_ACK"].pop(address)
+                                self.maxsize += 1
                     except socket.timeout:
                         self.socket.sendto(message_FIN_ACK.to_bytes(), fromSenderAddr)
                 # print(f"[Sender] Received FIN_ACK answer.\n {fin_ack_answer}")
@@ -480,14 +465,14 @@ class RDTSocket():
             
     def close_conn_passive(self, address, SEQ_num, ACK_num):
         def send_FIN_ACK(address, SEQ_num, ACK_num):
-            message_FIN_ACK = RDTHeader(0, 1, 1, SEQ_num, ACK_num, 0, 0, None, 0)
+            message_FIN_ACK = RDTHeader(0, 1, 1, SEQ_num, ACK_num, 0, 0, None, self.maxsize)
             message_FIN_ACK.set_source_address(self.address, self.port)
             message_FIN_ACK.set_target_address(address[0], address[1])
             message_FIN_ACK.checksum_cal()
             return message_FIN_ACK
             
         def send_ACK(address, SEQ_num, ACK_num):
-            message_ACK = RDTHeader(0, 0, 1, SEQ_num, ACK_num, 0, 0, None, 0)
+            message_ACK = RDTHeader(0, 0, 1, SEQ_num, ACK_num, 0, 0, None, self.maxsize)
             message_ACK.set_source_address(self.address, self.port)
             message_ACK.set_target_address(address[0], address[1])
             message_ACK.checksum_cal()
@@ -518,6 +503,7 @@ class RDTSocket():
                     with self.packets_lock:
                         if address in self.packets["ACK"].keys():
                             ack_answer = self.packets["ACK"].pop(address)
+                            self.maxsize += 1
                 except socket.timeout:
                     self.socket.sendto(message_FIN_ACK.to_bytes(), fromReceiverAddr)
             # print(f"[Receiver] Received ACK answer.\n {ack_answer}")
