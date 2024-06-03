@@ -75,8 +75,8 @@ def UDP_start_test(port=12349):
 
 
 def RDT_start_test(port_source=12345, port_target=12346):
-    sender = Process(target=RDT_send_file, args=(("127.0.0.1", port_source), ("127.0.0.1", port_target)))
-    receiver = Process(target=RDT_receive_file, args=(("127.0.0.1", port_source), ("127.0.0.1", port_target)))
+    sender = Process(target=RDT_send_file, args=(("10.27.40.212", port_source), ("10.27.40.212", port_target)))
+    receiver = Process(target=RDT_receive_file, args=(("10.27.40.212", port_source), ("10.27.40.212", port_target)))
 
     receiver.start()
     time.sleep(5)

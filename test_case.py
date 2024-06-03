@@ -6,31 +6,31 @@ import signal
 
 # connect proxy server 
 
-# proxy_server_address = ('10.16.52.94', 12234)   # ProxyServerAddress
-# fromSenderAddr = ('10.16.52.94', 12345)         # FromSender
-# toReceiverAddr = ('10.16.52.94', 12346)         # ToSender
-# fromReceiverAddr = ('10.16.52.94', 12347)       # FromReceiver
-# toSenderAddr = ('10.16.52.94', 12348)           # ToReceiver
+proxy_server_address = ('10.16.52.94', 12234)   # ProxyServerAddress
+fromSenderAddr = ('10.16.52.94', 12345)         # FromSender
+toReceiverAddr = ('10.16.52.94', 12346)         # ToSender
+fromReceiverAddr = ('10.16.52.94', 12347)       # FromReceiver
+toSenderAddr = ('10.16.52.94', 12348)           # ToReceiver
 
-# resultAddr = ('10.16.52.94', 12230)
+resultAddr = ('10.16.52.94', 12230)
 
-# #TODO change the adress to your address
-# sender_address = ("10.16.56.14", 12344)         # Your sender address
-# receiver_address = ("10.16.56.14", 12349)       # Your receiver address
+#TODO change the adress to your address
+sender_address = ("10.16.56.14", 12344)         # Your sender address
+receiver_address = ("10.16.56.14", 12349)       # Your receiver address
 
 
 
 # connect locally server
 
-proxy_server_address = ('127.0.0.1', 12234)
-fromSenderAddr = ('127.0.0.1', 12345)
-toReceiverAddr = ('127.0.0.1', 12346)
-fromReceiverAddr = ('127.0.0.1', 12347)
-toSenderAddr = ('127.0.0.1', 12348)
-
-sender_address = ("127.0.0.1", 12244)
-receiver_address = ("127.0.0.1", 12249)
-resultAddr = ("127.0.0.1", 12230)
+# proxy_server_address = ('127.0.0.1', 12234)
+# fromSenderAddr = ('127.0.0.1', 12345)
+# toReceiverAddr = ('127.0.0.1', 12346)
+# fromReceiverAddr = ('127.0.0.1', 12347)
+# toSenderAddr = ('127.0.0.1', 12348)
+#
+# sender_address = ("127.0.0.1", 12244)
+# receiver_address = ("127.0.0.1", 12249)
+# resultAddr = ("127.0.0.1", 12230)
 num_test_case = 16
 
 class TimeoutException(Exception):
