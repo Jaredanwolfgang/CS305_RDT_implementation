@@ -20,9 +20,11 @@ SEQ_RIGHT = 1000
 fromSenderAddr = ('10.16.52.94', 12345)         # FromSender
 fromReceiverAddr = ('10.16.52.94', 12347)       # FromReceiver
 
+
 class RDTSocket():
     sender_state = ['Wait for call 0 from above', 'Wait for call 1 from above', 'Wait for ACK 0', 'Wait for ACK 1']
     receiver_state = ['Wait for 0 from below', 'Wait for 1 from below']
+
     def __init__(self) -> None:
         """
         You shold define necessary attributes in this function to initialize the RDTSocket
@@ -33,21 +35,20 @@ class RDTSocket():
         self.port = None
         self.timeout = 5
     
-        self.conn_lock = threading.Lock()
-        self.queue_lock = threading.Lock()
-        self.packets_lock = threading.Lock()
-
         # Received Packets as Sever
         self.packets = {"SYN": {}, "ACK": {}, "SYN_ACK": {}, "FIN_ACK": {}, "DATA": {}}
         # Established Connection as Client
         self.conn = {} # Established Connection
         # Pending Connection
         self.conn_queue = []
+        self.conn_lock = None
+        self.queue_lock = None
+        self.packets_lock = None
 
         # Threads
         self.sort_thread = None
         self.conn_thread = None
-    
+
     def bind(self, address: (str, int)): # type: ignore
         """
         When trying to establish a connection. The socket must be bound to an address 
@@ -64,8 +65,10 @@ class RDTSocket():
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.socket.bind((self.address, self.port))
         self.socket.settimeout(32)
+
     def TransAddr(self, addr):
         return (str(addr[0]) + '.' + str(addr[1]) + '.' + str(addr[2]) + '.' + str(addr[3]), addr[4])
+
     def listen_handler(self):
         while True and self.status:
             try:
@@ -73,7 +76,7 @@ class RDTSocket():
                 address = None
                 while data is None:
                     data, _ = self.socket.recvfrom(SENT_SIZE)
-                    # print("Received!")
+                    # print(f"{self.port}: Received!")
                     packet = RDTHeader()
                     packet.from_bytes(data)
                     address = self.TransAddr(packet.Source_address)
@@ -126,6 +129,9 @@ class RDTSocket():
                 self.socket.close()
         
     def listen(self, max_connections=1):
+        self.conn_lock = threading.Lock()
+        self.queue_lock = threading.Lock()
+        self.packets_lock = threading.Lock()
         try:
             print("[Server] Start Listening.")
             self.sort_thread = threading.Thread(target=self.listen_handler, args=())
@@ -256,21 +262,23 @@ class RDTSocket():
             print(f"[Client] RDT Connection Establishment Error: {error.with_traceback()}")
             self.socket.close()
             
-    def udt_send(self, address, data, SEQ_num, ACK_num):
-        sndpkt = RDTHeader(0, 0, 0, SEQ_num, ACK_num, len(data), 0, data, 0)
-        sndpkt.set_source_address(self.address, self.port)
-        sndpkt.set_target_address(address[0], address[1])
-        sndpkt.checksum_cal()
-        self.socket.sendto(sndpkt.to_bytes(), address)
-        # print(f"[{(self.address, self.port)}] Message sent.\n {sndpkt} \n End Packet.\n")
-        return time.time() # Start Timer
+    # def udt_send(self, address, data, SEQ_num, ACK_num):
+    #     sndpkt = RDTHeader(0, 0, 0, SEQ_num, ACK_num, len(data), 0, data, 0)
+    #     sndpkt.set_source_address(self.address, self.port)
+    #     sndpkt.set_target_address(address[0], address[1])
+    #     sndpkt.checksum_cal()
+    #     self.socket.sendto(sndpkt.to_bytes(), address)
+    #     # print(f"[{(self.address, self.port)}] Message sent.\n {sndpkt} \n End Packet.\n")
+    #     return time.time() # Start Timer
 
-    def udt_send_t(self, address, data, SEQ_num, ACK_num, proxy) -> None:
+    def udt_send_t(self, address, data, SEQ_num, ACK_num, proxy, test_case=20) -> None:
         sndpkt = RDTHeader(0, 0, 0, SEQ_num, ACK_num, len(data), 0, data, 0)
+        sndpkt.set_test_case(test_case)
         sndpkt.set_source_address(self.address, self.port)
         sndpkt.set_target_address(address[0], address[1])
         sndpkt.checksum_cal()
         self.socket.sendto(sndpkt.to_bytes(), proxy)
+
     def corrupt(self, rcvpkt):
         rcv_checksum = rcvpkt.CHECKSUM
         # print(f"Received packet checksum: {rcvpkt.CHECKSUM}")
@@ -281,7 +289,7 @@ class RDTSocket():
         else:
             return True
         
-    def send(self, address, data=None, tcpheader=None):
+    def send(self, address, data=None, tcpheader=None, test_case=20):
         """
         RDT can use this function to send specified data to a target that has already 
         established a reliable connection. Please note that the corresponding CHECKSUM 
@@ -302,6 +310,7 @@ class RDTSocket():
         timer = None
         SEQ_num = 0 # Byte Stream "number" of the first byte in the data
         ACK_num = 0 # Byte Stream "number" of the next byte expected by the sender
+
         def ByteId(x) -> int:
             return x // DATA_DIVIDE_LENGTH
         is_acked = [False for _ in range(len(data_seg))]
@@ -321,7 +330,7 @@ class RDTSocket():
                 st.append(seq)
                 SEQ_num = seq * DATA_DIVIDE_LENGTH
                 ACK_num = SEQ_num + len(data_seg[seq])
-                self.udt_send_t(address, data_seg[seq], SEQ_num, ACK_num, fromSenderAddr)
+                self.udt_send_t(address, data_seg[seq], SEQ_num, ACK_num, fromSenderAddr, test_case)
                 cwnd -= 1
                 cnt += 1
             probe_time = 31
@@ -333,6 +342,8 @@ class RDTSocket():
                 with self.packets_lock:
                     if len(self.packets["DATA"][address]) != 0:
                         break
+                if time.time() - RTT >= ctrl.timeoutInterval * 2:
+                    break
             RTT = time.time() - RTT
             # print(RTT)
             timer = time.time()
@@ -347,7 +358,7 @@ class RDTSocket():
                 if time.time() - timer >= ctrl.timeoutInterval:
                     break
 
-            # print(ctrl.timeoutInterval)
+            print(ctrl.timeoutInterval)
             # with self.packets_lock:
             #     q = self.packets["DATA"][address]
             # for pkt in q:
@@ -373,7 +384,7 @@ class RDTSocket():
         data_queue = [RDTHeader(PAYLOAD=data) for data in data_seg]
         pass
 
-    def recv(self, address):
+    def recv(self, address, test_case=20):
         """
         You should implement the basic logic for receiving data in this function, and 
         verify the data. When corrupted or missing data packets are detected, a request 
@@ -400,7 +411,7 @@ class RDTSocket():
                 if self.corrupt(pkt):
                     continue
                 data: str = " "
-                self.udt_send_t(address, data, pkt.ACK_num, pkt.ACK_num, fromReceiverAddr)
+                self.udt_send_t(address, data, pkt.ACK_num, pkt.ACK_num, fromReceiverAddr, test_case=test_case)
                 if pkt.ACK_num != pkt.SEQ_num:
                     pkt_recv[pkt.SEQ_num] = pkt.PAYLOAD.encode()
         self.close_conn_passive(address, SEQ_num, ACK_num)
@@ -423,7 +434,7 @@ class RDTSocket():
             return message_ACK
         
         try:
-            if(address in self.conn.keys()):
+            if address in self.conn.keys():
                 # Send FIN ACK
                 message_FIN_ACK = send_FIN_ACK(address, SEQ_num, ACK_num)
                 self.socket.sendto(message_FIN_ACK.to_bytes(), fromSenderAddr)
@@ -528,8 +539,10 @@ class RDTSocket():
         try:
             for address, state in self.conn.items():
                 self.close_conn_active(address, 0, 1)
-            self.socket.close()
+            if self.socket:
+                self.socket.close()
             self.status = 0
         except Exception as error:
             print(f"[Client] RDT Connection Closd failed with: {error}")
-            self.socket.close()
+            if self.socket:
+                self.socket.close()

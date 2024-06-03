@@ -1,5 +1,8 @@
 import socket
+import string
 import time
+import random
+
 from RDT import RDTSocket
 from multiprocessing import Process
 import signal
@@ -8,15 +11,16 @@ import signal
 
 proxy_server_address = ('10.16.52.94', 12234)   # ProxyServerAddress
 fromSenderAddr = ('10.16.52.94', 12345)         # FromSender
-toReceiverAddr = ('10.16.52.94', 12346)         # ToSender
+# toReceiverAddr = ('10.16.52.94', 12346)         # ToSender
 fromReceiverAddr = ('10.16.52.94', 12347)       # FromReceiver
-toSenderAddr = ('10.16.52.94', 12348)           # ToReceiver
+# toSenderAddr = ('10.16.52.94', 12348)           # ToReceiver
 
 resultAddr = ('10.16.52.94', 12230)
 
-#TODO change the adress to your address
-sender_address = ("10.16.56.14", 12344)         # Your sender address
-receiver_address = ("10.16.56.14", 12349)       # Your receiver address
+# TODO: Change to your own IP address here
+LOCAL_IP = '10.32.72.227'
+sender_address = (LOCAL_IP, 12345)         # Your sender address
+receiver_address = (LOCAL_IP, 12346)       # Your receiver address
 
 
 
@@ -43,25 +47,26 @@ def handler(signum, frame):
 # signal.signal(signal.SIGALRM, handler)
 
 def test_case():
-    sender_sock = None
-    reciever_sock = None
-
     # TODO: You could change the range of this loop to test specific case(s) in local test.
-
-    for i in range(num_test_case):
+    sender_sock = None
+    receiver_sock = None
+    for i in range(8, num_test_case):
+    # for i in :
         if sender_sock:
             del sender_sock
-        if reciever_sock:
-            del reciever_sock
-        sender_sock = RDTSocket()   # You can change the initialize RDTSocket()
-        reciever_sock = RDTSocket() # You can change the initialize RDTSocket()
-        print(f"Start test case : {i}")
+        if receiver_sock:
+            del receiver_sock
+        sender_sock = RDTSocket()    # You can change the initialize RDTSocket()
+        receiver_sock = RDTSocket()  # You can change the initialize RDTSocket()
+        print(f"\n\n[Case {i}] Start test.")
 
         try:
-            result = RDT_start_test(sender_sock, reciever_sock, sender_address, receiver_address, i)
+            result = RDT_start_test(sender_sock, receiver_sock, sender_address, receiver_address, i)
         except Exception as e:
             print(e)
         finally:
+
+            print(f"\n[Case {i}] Finally")
 
             client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             client_sock.connect(resultAddr)
@@ -73,7 +78,7 @@ def test_case():
             client_sock.close()
 
             print(f"proxy result for test case {i} {response.decode()}")
-            
+            print(f"test case {i}, validation = {result}")
             if response.decode() == 'True' and result:
                 print(f"test case {i} pass")
             else:
@@ -85,8 +90,7 @@ def test_case():
             # demo. you should make some changes based on your code implementation or you can 
             # close them in the other places.
 
-            sender_sock.close()
-            reciever_sock.close()
+            print("[Test] Start to Close")
 
         #############################################################################
             time.sleep(5)
@@ -98,32 +102,21 @@ def test_case():
             time.sleep(10)
     
 
-def RDT_start_test(sender_sock, reciever_sock, sender_address, receiver_address, test_case):
+def RDT_start_test(sender_sock, receiver_sock, sender_address, receiver_address, test_case):
+    print("RDT Test Start")
     sender = Process(target=RDT_send, args=(sender_sock, sender_address, receiver_address, test_case))
-    receiver = Process(target=RDT_receive, args=(reciever_sock, receiver_address, test_case))
-
+    receiver = Process(target=RDT_receive, args=(receiver_sock, receiver_address, test_case))
     receiver.start()
     time.sleep(5)
     sender.start()
-
-    # if test_case < 5:
-    #     signal.alarm(20)
-    # else:
-    #     signal.alarm(120)
 
     sender.join()
     receiver.join()
     time.sleep(1)
 
-    # signal.alarm(0)
-
-    if test_case < 5:
-        return True
-    else:
-        #TODO you may need to change the path, if you want.
-        return test_file_integrity('original.txt', 'transmit.txt')
+    return test_file_integrity('original.txt', 'transmit.txt')
     
-def RDT_send(sender_sock: RDTSocket, source_address, target_address, test_case):
+def RDT_send(sender_sock: RDTSocket, sender_addr, receiver_addr, test_case):
     """
         You should refer to your own implementation to implement this code. the sender should specify the Source_address, Target_address, and test_case in the Header of all packets sent by the receiver.
         params: 
@@ -131,67 +124,73 @@ def RDT_send(sender_sock: RDTSocket, source_address, target_address, test_case):
             source_address:    Source IP address and its port
             test_case:         The rank of test case
     """
-    data_blocks = []
-    file_path = 'original.txt' # You can modify the path of file. Howerver, if you change this file, you need to modify the input for function test_file_integrity()
 
-    sock = sender_sock  
-    sock.proxy_server_addr = fromSenderAddr
+    # if test_case >= 5:
+    #############################################################################
+    # TODO: you need to send a files. Here you need to write the code according to your own implementation.
 
-    sock.bind(source_address)
-    sock.connect(target_address)
+    sender_sock.bind(sender_addr)
+    sender_sock.listen(5)
+    print(f"[Sender] To Connect ...")
+    sender_sock.connect(receiver_addr)
 
-    if test_case >= 5:
-        #############################################################################
-            # TODO: you need to send a files. Here you need to write the code according to your own implementation.
+    with open("./original.txt", "w") as file:
+        data = ''
+        if test_case >= 5:
+            sz = 3 * 1024  # 100KB
+            data = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(sz))
+        else:
+            data = 'SUSTech'
 
-            raise NotImplementedError
-        #############################################################################
-        
-    else:
+        file.write(data)
+    # time.sleep(1)
+    with open('./original.txt', "rb") as file:
+        data = file.read()
+        print(f"[Sender] testcase {test_case} is sending {data}...")
+        sender_sock.send(address=receiver_addr, data=data, test_case=test_case)
 
-        #############################################################################
-            # TODO: you need to send a short message. May be you can use:
-            # data = "Short Message test"
-            # sock.send(data=data, test_case=test_case)
+    sender_sock.close()
 
-            raise NotImplementedError
-        #############################################################################
+    #############################################################################
+    # TODO: you need to send a short message. May be you can use
+    # data = "Short Message test"
+    # sock.send(data=data, test_case=test_case)
+    #############################################################################
 
 
 
-def RDT_receive(reciever_sock: RDTSocket, source_address, test_case):
+def RDT_receive(receiver_sock: RDTSocket, receiver_addr, test_case):
     """
         You should refer to your own implementation to implement this code. the receiver should specify the Source_address, Target_address, and test_case in the Header of all packets sent by the receiver.
         params: 
             source_address:    Source IP address and its port
             test_case:         The rank of test case
     """
-    sock = reciever_sock
-    sock.proxy_server_addr = fromReceiverAddr
-    sock.bind(source_address)
-    server_sock = sock.accept()
+    receiver_sock.bind(receiver_addr)
+    receiver_sock.listen(5)
+    data_received = b''
+    addr = ''
 
+    while True:
+        try:
+            addr = receiver_sock.accept()
 
+            start_time = time.time()
+            data_received = receiver_sock.recv(address=addr, test_case=test_case)
+            print(f"time_used: {time.time() - start_time} s")
+            break
+        except KeyboardInterrupt:
+            break
 
-    if test_case >= 5:
-        #############################################################################
-            # TODO: you need to receive original.txt from sender. Here you need to write the code according to your own implementation.
+    print(f"Server connected to {addr}")
+    print(data_received)
+    with open('transmit.txt', "wb") as file:
+        for i in data_received:
+            file.write(i)
+    print("[Receiver] end")
 
-            # you should Save all data to the file (transmit.txt), and stop this loop when the client close the connection. 
-            # After that, you need to use the following function to verify the file that you received. When test_case >= 5, the test is passed only when test_file_integrity is verified and the proxy is verified.
-            raise NotImplementedError
-        #############################################################################
-        
-    else:
+    receiver_sock.close()
 
-        #############################################################################
-            # TODO: you need to receive a short message. May be you can use:
-            # data = server_sock.recv() 
-
-            raise NotImplementedError
-        #############################################################################
-
-        
 
 def test_file_integrity(original_path, transmit_path):
     with open(original_path, 'rb') as file1, open(transmit_path, 'rb') as file2:
@@ -206,6 +205,7 @@ def test_file_integrity(original_path, transmit_path):
                 break
 
     return True      
-        
+
+
 if __name__ == '__main__':
     test_case()

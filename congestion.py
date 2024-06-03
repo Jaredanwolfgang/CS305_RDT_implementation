@@ -6,7 +6,7 @@ class state(enumerate):
 class CongestionController():
     def __init__(self):
         self.state = state.SLOW_START
-        self.cwnd = 1
+        self.cwnd = 512
         self.ssthresh = 512
         self.dup_ack = 0
         self.estimatedRTT = 0.2

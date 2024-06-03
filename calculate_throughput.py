@@ -8,7 +8,7 @@ from multiprocessing import Process
 
 Speed_RDT = 0
 Speed_UDP = 0
-
+LOCAL_IP = '10.32.72.227'
 
 def UDP_send_file(ip, port):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -75,8 +75,8 @@ def UDP_start_test(port=12349):
 
 
 def RDT_start_test(port_source=12345, port_target=12346):
-    sender = Process(target=RDT_send_file, args=(("10.27.40.212", port_source), ("10.27.40.212", port_target)))
-    receiver = Process(target=RDT_receive_file, args=(("10.27.40.212", port_source), ("10.27.40.212", port_target)))
+    sender = Process(target=RDT_send_file, args=((LOCAL_IP, port_source), (LOCAL_IP, port_target)))
+    receiver = Process(target=RDT_receive_file, args=((LOCAL_IP, port_source), (LOCAL_IP, port_target)))
 
     receiver.start()
     time.sleep(5)
@@ -106,7 +106,7 @@ def RDT_send_file(source_address, target_address, file_path='./original.txt'):
     file_path = './original.txt'
     with open(file_path, "rb") as file:
         data = file.read()
-        client.send(source_address, data)
+        client.send(address=source_address, data=data, test_case=20)
         print(f"Client connected to {source_address}")
     client.close()
     return
@@ -137,7 +137,7 @@ def RDT_receive_file(source_address, target_address, file_path='./transmit_rdt.t
             addr = server.accept()
             if addr == target_address:
                 start_time = time.time()
-                data_received = server.recv(address=addr)
+                data_received = server.recv(address=addr, test_case=20)
                 print(f"time_used: {time.time() - start_time} s")
                 break
         except KeyboardInterrupt:
