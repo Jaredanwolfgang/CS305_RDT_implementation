@@ -17,10 +17,6 @@ SENT_SIZE = RDT_HEADER_LENGTH + DATA_LENGTH
 SEQ_LEFT = 0
 SEQ_RIGHT = 1000
 
-fromSenderAddr = ('10.16.52.94', 12345)         # FromSender
-fromReceiverAddr = ('10.16.52.94', 12347)       # FromReceiver
-
-
 class RDTSocket():
 
     def __init__(self) -> None:
@@ -48,6 +44,11 @@ class RDTSocket():
         self.conn_thread = None
 
         self.maxsize = 512
+
+        # Proxy Configuration, if tested locally, the proxy is the same as the target address
+        self.isLocalTest = False
+        self.fromSenderAddr = ('10.16.52.94', 12345)  # FromSender
+        self.fromReceiverAddr = ('10.16.52.94', 12347)  # FromReceiver
 
     def bind(self, address: (str, int)): # type: ignore
         """
@@ -169,7 +170,7 @@ class RDTSocket():
                     # Send SYN_ACK package
                     message_SYN_ACK = send_SYN_ACK(address, packet.ACK_num, packet.SEQ_num + 1)
 
-                    self.socket.sendto(message_SYN_ACK.to_bytes(), fromReceiverAddr)
+                    self.socket.sendto(message_SYN_ACK.to_bytes(), address if self.isLocalTest else self.fromReceiverAddr)
                     # print(f"[Server] SYN_ACK packet sent.\n {message_SYN_ACK}")
                     
                     ack_answer = None
@@ -179,7 +180,7 @@ class RDTSocket():
                                 ack_answer = self.packets["ACK"].pop(address)
                                 self.maxsize += 1
                         except self.socket.timeout:
-                            self.socket.sendto(message_SYN_ACK.to_bytes(), fromReceiverAddr)
+                            self.socket.sendto(message_SYN_ACK.to_bytes(), address if self.isLocalTest else self.fromReceiverAddr)
                     # print(f"[Server] Received ACK answer.\n {ack_answer}")
                     
                     # Receive ACK response
@@ -218,7 +219,7 @@ class RDTSocket():
         try:
             # Send SYN
             message_SYN = send_SYN(address, random.randint(SEQ_LEFT, SEQ_RIGHT), 0)
-            self.socket.sendto(message_SYN.to_bytes(), fromSenderAddr)
+            self.socket.sendto(message_SYN.to_bytes(), address if self.isLocalTest else self.fromSenderAddr)
             # print(f"[Client] Message SYN sent.\n {message_SYN}")
         
             # Receive SYN_ACK
@@ -229,12 +230,12 @@ class RDTSocket():
                         syn_ack_answer = self.packets["SYN_ACK"].pop(address)
                         self.maxsize += 1
                 except self.socket.timeout:
-                    self.socket.sendto(message_SYN.to_bytes(), fromSenderAddr)
+                    self.socket.sendto(message_SYN.to_bytes(), address if self.isLocalTest else self.fromSenderAddr)
             # print(f"[Client] Message SYN_ACK received.\n {syn_ack_answer}")
             
             # Send ACK
             message_ACK = send_ACK(address, syn_ack_answer.ACK_num, syn_ack_answer.SEQ_num + 1)
-            self.socket.sendto(message_ACK.to_bytes(), fromSenderAddr)
+            self.socket.sendto(message_ACK.to_bytes(), address if self.isLocalTest else self.fromSenderAddr)
             # print(f"[Client] Message ACK sent.\n {message_ACK}")
             
             # Connection established
@@ -322,7 +323,7 @@ class RDTSocket():
                 st.append(seq)
                 SEQ_num = seq * DATA_DIVIDE_LENGTH
                 ACK_num = SEQ_num + len(data_seg[seq])
-                self.udt_send_t(address, data_seg[seq], SEQ_num, ACK_num, fromSenderAddr, test_case)
+                self.udt_send_t(address, data_seg[seq], SEQ_num, ACK_num, address if self.isLocalTest else self.fromSenderAddr, test_case)
                 cwnd -= 1
                 cnt += 1
             probe_time = 31
@@ -400,7 +401,7 @@ class RDTSocket():
                 if self.corrupt(pkt):
                     continue
                 data: str = " "
-                self.udt_send_t(address, data, pkt.ACK_num, pkt.ACK_num, fromReceiverAddr, test_case=test_case)
+                self.udt_send_t(address, data, pkt.ACK_num, pkt.ACK_num, address if self.isLocalTest else self.fromReceiverAddr, test_case=test_case)
                 if pkt.ACK_num != pkt.SEQ_num:
                     pkt_recv[pkt.SEQ_num] = pkt.PAYLOAD.encode()
         self.close_conn_passive(address, SEQ_num, ACK_num)
@@ -426,7 +427,7 @@ class RDTSocket():
             if address in self.conn.keys():
                 # Send FIN ACK
                 message_FIN_ACK = send_FIN_ACK(address, SEQ_num, ACK_num)
-                self.socket.sendto(message_FIN_ACK.to_bytes(), fromSenderAddr)
+                self.socket.sendto(message_FIN_ACK.to_bytes(), address if self.isLocalTest else self.fromSenderAddr)
                 # print(f"[Sender] Message FIN_ACK sent.\n {message_FIN_ACK}")
                 
                 # Receive ACK
@@ -439,7 +440,7 @@ class RDTSocket():
                                 ack_answer = self.packets["ACK"].pop(address)
                                 self.maxsize += 1
                     except socket.timeout:
-                        self.socket.sendto(message_FIN_ACK.to_bytes(), fromSenderAddr)
+                        self.socket.sendto(message_FIN_ACK.to_bytes(), address if self.isLocalTest else self.fromSenderAddr)
                 # print(f"[Sender] Received ACK answer.\n {ack_answer}")
                 
                 # Receive FIN ACK
@@ -452,12 +453,12 @@ class RDTSocket():
                                 fin_ack_answer = self.packets["FIN_ACK"].pop(address)
                                 self.maxsize += 1
                     except socket.timeout:
-                        self.socket.sendto(message_FIN_ACK.to_bytes(), fromSenderAddr)
+                        self.socket.sendto(message_FIN_ACK.to_bytes(), address if self.isLocalTest else self.fromSenderAddr)
                 # print(f"[Sender] Received FIN_ACK answer.\n {fin_ack_answer}")
                 
                 # Send ACK
                 message_ACK = send_ACK(address, fin_ack_answer.ACK_num, fin_ack_answer.SEQ_num + 1)
-                self.socket.sendto(message_ACK.to_bytes(), fromSenderAddr)
+                self.socket.sendto(message_ACK.to_bytes(), address if self.isLocalTest else self.fromSenderAddr)
                 # print(f"[Sender] Send ACK message.\n {message_ACK}")
                 
                 # Close connection
@@ -492,13 +493,13 @@ class RDTSocket():
                 
             # Send ACK
             message_ACK = send_ACK(address, fin_ack_answer.ACK_num, fin_ack_answer.SEQ_num + 1)
-            self.socket.sendto(message_ACK.to_bytes(), fromReceiverAddr)
+            self.socket.sendto(message_ACK.to_bytes(), address if self.isLocalTest else self.fromReceiverAddr)
             # self.socket.sendto(message_ACK.to_bytes(), address)
             # print(f"[Receiver] Message ACK sent.\n {message_ACK}")
                 
             # Send FIN ACK
             message_FIN_ACK = send_FIN_ACK(address, SEQ_num, ACK_num)
-            self.socket.sendto(message_FIN_ACK.to_bytes(), fromReceiverAddr)
+            self.socket.sendto(message_FIN_ACK.to_bytes(), address if self.isLocalTest else self.fromReceiverAddr)
             # print(f"[Receiver] Message FIN_ACK sent.\n {message_FIN_ACK}")
             
             # Receive ACK
@@ -511,7 +512,7 @@ class RDTSocket():
                             ack_answer = self.packets["ACK"].pop(address)
                             self.maxsize += 1
                 except socket.timeout:
-                    self.socket.sendto(message_FIN_ACK.to_bytes(), fromReceiverAddr)
+                    self.socket.sendto(message_FIN_ACK.to_bytes(), address if self.isLocalTest else self.fromReceiverAddr)
             # print(f"[Receiver] Received ACK answer.\n {ack_answer}")
 
             # Close connection

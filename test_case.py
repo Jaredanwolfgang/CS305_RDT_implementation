@@ -10,17 +10,13 @@ import signal
 # connect proxy server 
 
 SERVER_IP = '10.16.52.94'
-
 proxy_server_address = (SERVER_IP, 12234)   # ProxyServerAddress
 fromSenderAddr = (SERVER_IP, 12345)         # FromSender
-# toReceiverAddr = ('10.16.52.94', 12346)         # ToSender
 fromReceiverAddr = (SERVER_IP, 12347)       # FromReceiver
-# toSenderAddr = ('10.16.52.94', 12348)           # ToReceiver
 
 resultAddr = (SERVER_IP, 12230)
 
-# TODO: Change to your own IP address here
-LOCAL_IP = '10.32.72.227'
+LOCAL_IP = '10.27.146.63'                  # TODO: Change to your own IP address here
 sender_address = (LOCAL_IP, 12345)         # Your sender address
 receiver_address = (LOCAL_IP, 12346)       # Your receiver address
 
@@ -49,10 +45,9 @@ def handler(signum, frame):
 # signal.signal(signal.SIGALRM, handler)
 
 def test_case():
-    # TODO: You could change the range of this loop to test specific case(s) in local test.
     sender_sock = None
     receiver_sock = None
-    for i in range(13, num_test_case):
+    for i in range(0, num_test_case):
     # for i in :
         if sender_sock:
             del sender_sock
@@ -116,7 +111,7 @@ def RDT_start_test(sender_sock, receiver_sock, sender_address, receiver_address,
     receiver.join()
     time.sleep(1)
 
-    return test_file_integrity('original.txt', 'transmit.txt')
+    return test_file_integrity('data/original.txt', 'data/transmit.txt')
     
 def RDT_send(sender_sock: RDTSocket, sender_addr, receiver_addr, test_case):
     """
@@ -136,7 +131,7 @@ def RDT_send(sender_sock: RDTSocket, sender_addr, receiver_addr, test_case):
     print(f"[Sender] To Connect ...")
     sender_sock.connect(receiver_addr)
 
-    with open("./original.txt", "w") as file:
+    with open("data/original.txt", "w") as file:
         data = ''
         if test_case >= 5:
             sz = 100 * 1024  # 100KB
@@ -146,7 +141,7 @@ def RDT_send(sender_sock: RDTSocket, sender_addr, receiver_addr, test_case):
 
         file.write(data)
     # time.sleep(1)
-    with open('./original.txt', "rb") as file:
+    with open('data/original.txt', "rb") as file:
         data = file.read()
         print(f"[Sender] testcase {test_case} is sending ...")
         sender_sock.send(address=receiver_addr, data=data, test_case=test_case)
@@ -186,7 +181,7 @@ def RDT_receive(receiver_sock: RDTSocket, receiver_addr, test_case):
 
     print(f"Server connected to {addr}")
     print(data_received)
-    with open('transmit.txt', "wb") as file:
+    with open('data/transmit.txt', "wb") as file:
         for i in data_received:
             file.write(i)
     print("[Receiver] end")

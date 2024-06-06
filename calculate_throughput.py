@@ -1,6 +1,7 @@
 import signal
 import socket
 import os
+import threading
 import time
 import queue
 from RDT import RDTSocket
@@ -8,12 +9,12 @@ from multiprocessing import Process
 
 Speed_RDT = 0
 Speed_UDP = 0
-LOCAL_IP = '10.32.72.227'
+
 
 def UDP_send_file(ip, port):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     server_address = (ip, port)
-    file_path = './original.txt'
+    file_path = 'data/original.txt'
     data_list = []
     try:
         with open(file_path, "rb") as file:
@@ -36,7 +37,7 @@ def UDP_send_file(ip, port):
 def UDP_receive_file(ip, port):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((ip, port))
-    save_path = './transmit_udp.txt'
+    save_path = 'data/transmit_udp.txt'
     flag = True
     try:
         data_list = []
@@ -74,12 +75,12 @@ def UDP_start_test(port=12349):
     receiver.join()
 
 
-def RDT_start_test(port_source=12345, port_target=12346):
-    sender = Process(target=RDT_send_file, args=((LOCAL_IP, port_source), (LOCAL_IP, port_target)))
-    receiver = Process(target=RDT_receive_file, args=((LOCAL_IP, port_source), (LOCAL_IP, port_target)))
+def RDT_start_test(port_source=12246):
+    sender = Process(target=RDT_send_file, args=(("127.0.0.1", port_source), ("127.0.0.1", 13246)))
+    receiver = Process(target=RDT_receive_file, args=(("127.0.0.1", port_source),))
 
     receiver.start()
-    time.sleep(5)
+    time.sleep(2)
     sender.start()
 
     sender.join()
@@ -101,18 +102,18 @@ def RDT_send_file(source_address, target_address, file_path='./original.txt'):
     """
     client = RDTSocket()
     client.bind(target_address)
+    client.isLocalTest = True
     client.listen(5)
     client.connect(source_address)
-    file_path = './original.txt'
+    file_path = 'data/original.txt'
     with open(file_path, "rb") as file:
         data = file.read()
-        client.send(address=source_address, data=data, test_case=20)
-        print(f"Client connected to {source_address}")
+        client.send(source_address, data)
+        # print(f"Client connected to {source_address}")
     client.close()
     return
 
-
-def RDT_receive_file(source_address, target_address, file_path='./transmit_rdt.txt'):
+def RDT_receive_file(source_address):
     """
         Depending on your design, you need to save the received data to flie_path. Make sure the data order is correct and the data is complete.
         Additionally, you need to time this process, starting from when the receiver receives the first piece of data until the receiver closes the connection.
@@ -129,41 +130,39 @@ def RDT_receive_file(source_address, target_address, file_path='./transmit_rdt.t
             source_address:    Source IP address and its port
             file_path:         The file path to the received data
     """
+    global data_received, answer
     server = RDTSocket()
     server.bind(source_address)
+    server.isLocalTest = True
     server.listen(5)
     while True:
         try:
             addr = server.accept()
-            if addr == target_address:
-                start_time = time.time()
-                data_received = server.recv(address=addr, test_case=20)
-                print(f"time_used: {time.time() - start_time} s")
-                break
+            print("Connected to ", addr)
+            answer = server.recv(address=addr, test_case=0)
+            # print(data_received)
+            break
         except KeyboardInterrupt:
             break
         except:
             continue
 
-    print(f"Server connected to {addr}")
-    print(data_received)
+    file_path = 'data/transmit_rdt.txt'
     with open(file_path, "wb") as file:
-        for i in data_received:
+        for i in answer:
             file.write(i)
     server.close()
     return
 
-
 def test_file_integrity(original_path, transmit_path):
-    with open(original_path, 'rb') as file1, open(transmit_path, 'rb') as file2:
+    with open(original_path, 'rb') as file1, open('data/transmit_rdt.txt', 'rb') as file2:
         print("Conducting file integrity test.")
         while True:
             block1 = file1.read(4096)
             block2 = file2.read(4096)
 
             if block1 != block2:
-                raise Exception("Contents is different")
-
+                raise Exception("Contents are different")
             if not block1:
                 break
 
@@ -180,7 +179,7 @@ def test_throughput():
     # Yours
     try:
         RDT_start_test()
-        test_file_integrity('./original.txt', './transmit_rdt.txt')
+        test_file_integrity('data/original.txt', 'data/transmit_rdt.txt')
     except Exception as e:
         print(e)
 
