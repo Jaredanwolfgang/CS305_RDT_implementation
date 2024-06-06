@@ -22,8 +22,6 @@ fromReceiverAddr = ('10.16.52.94', 12347)       # FromReceiver
 
 
 class RDTSocket():
-    sender_state = ['Wait for call 0 from above', 'Wait for call 1 from above', 'Wait for ACK 0', 'Wait for ACK 1']
-    receiver_state = ['Wait for 0 from below', 'Wait for 1 from below']
 
     def __init__(self) -> None:
         """
@@ -137,8 +135,8 @@ class RDTSocket():
         self.packets_lock = threading.Lock()
         try:
             print("[Server] Start Listening.")
-            self.sort_thread = threading.Thread(target=self.listen_handler, args=())
-            self.conn_thread = threading.Thread(target=self.conn_handler, args=(max_connections, ))
+            self.sort_thread = threading.Thread(target=self.listen_handler, daemon=True, args=())
+            self.conn_thread = threading.Thread(target=self.conn_handler, daemon=True, args=(max_connections, ))
             self.sort_thread.daemon = True
             self.sort_thread.start()
             self.conn_thread.start()
@@ -170,6 +168,7 @@ class RDTSocket():
                     
                     # Send SYN_ACK package
                     message_SYN_ACK = send_SYN_ACK(address, packet.ACK_num, packet.SEQ_num + 1)
+
                     self.socket.sendto(message_SYN_ACK.to_bytes(), fromReceiverAddr)
                     # print(f"[Server] SYN_ACK packet sent.\n {message_SYN_ACK}")
                     
@@ -262,7 +261,11 @@ class RDTSocket():
         sndpkt.set_source_address(self.address, self.port)
         sndpkt.set_target_address(address[0], address[1])
         sndpkt.checksum_cal()
-        self.socket.sendto(sndpkt.to_bytes(), proxy)
+        try:
+            self.socket.sendto(sndpkt.to_bytes(), proxy)
+        except OSError as e:
+            pass
+
 
     def corrupt(self, rcvpkt):
         rcv_checksum = rcvpkt.CHECKSUM
@@ -302,11 +305,14 @@ class RDTSocket():
         un_acked = [i for i in range(len(data_seg))]
         ctrl = congestion.CongestionController()
         rwnd = 512
-
+        state_cnt, cwnd_last = 0, -1
         while len(un_acked) != 0:
             cwnd, cnt = min(ctrl.cwnd, rwnd), 0
             st = []
             print(cwnd, len(un_acked))
+            state_cnt = state_cnt + 1 if cwnd_last == cwnd else 0
+            maxt = 0.3 if state_cnt >= 8 else 2
+            cwnd_last = cwnd
             with self.packets_lock:
                 self.packets["DATA"][address] = []
 
@@ -328,7 +334,7 @@ class RDTSocket():
                 with self.packets_lock:
                     if len(self.packets["DATA"][address]) != 0:
                         break
-                if time.time() - RTT >= ctrl.timeoutInterval * 2:
+                if time.time() - RTT >= min(maxt, ctrl.timeoutInterval):
                     break
             RTT = time.time() - RTT
             # print(RTT)
@@ -338,12 +344,12 @@ class RDTSocket():
                 with self.packets_lock:
                     if len(self.packets["DATA"][address]) != 0:
                         pkt = self.packets["DATA"][address].pop()
-                        rwnd = pkt.rwnd
+                        rwnd = pkt.RWND
                         self.maxsize += 1
                         if not self.corrupt(pkt) and pkt.ACK_num > 0:
                             cnt -= not is_acked[ByteId(pkt.ACK_num - 1)]
                             is_acked[ByteId(pkt.ACK_num - 1)] = True
-                if time.time() - timer >= ctrl.timeoutInterval:
+                if time.time() - timer >= min(maxt, ctrl.timeoutInterval):
                     break
 
             print(ctrl.timeoutInterval)

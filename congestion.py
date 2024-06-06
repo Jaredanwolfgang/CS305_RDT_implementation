@@ -31,7 +31,7 @@ class CongestionController():
             self.state = state.FAST_RECOVERY
     def timeout(self):
         self.ssthresh = self.cwnd / 2
-        self.cwnd = 1
+        self.cwnd = 8
         self.state = state.SLOW_START
     def set_timeout_interval(self, sampleRTT): # Sample RTT comes from the timer for each messages sent
         self.sampleRTT = sampleRTT

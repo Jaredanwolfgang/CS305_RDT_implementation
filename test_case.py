@@ -9,13 +9,15 @@ import signal
 
 # connect proxy server 
 
-proxy_server_address = ('10.16.52.94', 12234)   # ProxyServerAddress
-fromSenderAddr = ('10.16.52.94', 12345)         # FromSender
+SERVER_IP = '10.16.52.94'
+
+proxy_server_address = (SERVER_IP, 12234)   # ProxyServerAddress
+fromSenderAddr = (SERVER_IP, 12345)         # FromSender
 # toReceiverAddr = ('10.16.52.94', 12346)         # ToSender
-fromReceiverAddr = ('10.16.52.94', 12347)       # FromReceiver
+fromReceiverAddr = (SERVER_IP, 12347)       # FromReceiver
 # toSenderAddr = ('10.16.52.94', 12348)           # ToReceiver
 
-resultAddr = ('10.16.52.94', 12230)
+resultAddr = (SERVER_IP, 12230)
 
 # TODO: Change to your own IP address here
 LOCAL_IP = '10.32.72.227'
@@ -50,7 +52,7 @@ def test_case():
     # TODO: You could change the range of this loop to test specific case(s) in local test.
     sender_sock = None
     receiver_sock = None
-    for i in range(8, num_test_case):
+    for i in range(13, num_test_case):
     # for i in :
         if sender_sock:
             del sender_sock
@@ -104,8 +106,8 @@ def test_case():
 
 def RDT_start_test(sender_sock, receiver_sock, sender_address, receiver_address, test_case):
     print("RDT Test Start")
-    sender = Process(target=RDT_send, args=(sender_sock, sender_address, receiver_address, test_case))
-    receiver = Process(target=RDT_receive, args=(receiver_sock, receiver_address, test_case))
+    sender = Process(target=RDT_send, daemon=True, args=(sender_sock, sender_address, receiver_address, test_case))
+    receiver = Process(target=RDT_receive, daemon=True, args=(receiver_sock, receiver_address, test_case))
     receiver.start()
     time.sleep(5)
     sender.start()
@@ -137,7 +139,7 @@ def RDT_send(sender_sock: RDTSocket, sender_addr, receiver_addr, test_case):
     with open("./original.txt", "w") as file:
         data = ''
         if test_case >= 5:
-            sz = 3 * 1024  # 100KB
+            sz = 100 * 1024  # 100KB
             data = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(sz))
         else:
             data = 'SUSTech'
@@ -146,7 +148,7 @@ def RDT_send(sender_sock: RDTSocket, sender_addr, receiver_addr, test_case):
     # time.sleep(1)
     with open('./original.txt', "rb") as file:
         data = file.read()
-        print(f"[Sender] testcase {test_case} is sending {data}...")
+        print(f"[Sender] testcase {test_case} is sending ...")
         sender_sock.send(address=receiver_addr, data=data, test_case=test_case)
 
     sender_sock.close()
